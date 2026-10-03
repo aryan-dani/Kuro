@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Secrets and environment
+.env
+.env.local
+.env.*
+!.env.example
+
+# Local caches / device discovery (may contain IDs)
+snapshot.json
+
+# Heavy local assets (download/warm separately)
+models/
+.venv/
+venv/
+env/
+
+# Nested third-party checkout (has its own git history)
+Bruno/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temp audio / screens
+*.wav
+*.mp3
+*.png
+*.jpg
+temp/
