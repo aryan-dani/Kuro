@@ -1,0 +1,88 @@
+{
+  "name": "Kuro Daily Digest",
+  "meta": {
+    "templateCredsSetupRequired": true,
+    "description": "Cron 20:00 Asia/Kolkata → Gmail last 24h → Groq digest → Telegram (skip if empty).",
+    "promptFile": "prompts/groq_digest.txt",
+    "delivery": "telegram"
+  },
+  "nodes": [
+    {
+      "id": "cron",
+      "name": "Every Evening",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 20 * * *" }]
+        }
+      },
+      "notes": "Set workflow timezone to Asia/Kolkata"
+    },
+    {
+      "id": "gmail_search",
+      "name": "Gmail Last Day",
+      "type": "n8n-nodes-base.gmail",
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 25,
+        "filters": {
+          "q": "newer_than:1d -category:promotions -category:social"
+        }
+      },
+      "notes": "Credential: Gmail OAuth2"
+    },
+    {
+      "id": "pack",
+      "name": "Pack Subjects",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (!items.length) return [{ json: { empty: true } }];\nconst lines = items.slice(0, 25).map((i) => {\n  const j = i.json;\n  return `From: ${j.from || ''} | Subject: ${j.subject || ''} | Snippet: ${String(j.snippet || '').slice(0, 200)}`;\n});\nreturn [{ json: { empty: false, blob: lines.join('\\n') } }];"
+      }
+    },
+    {
+      "id": "groq",
+      "name": "Groq Digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.empty ? null : JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: $env.KURO_GROQ_DIGEST_PROMPT || 'See workflows/prompts/groq_digest.txt' }, { role: 'user', content: $json.blob } ] }) }}"
+      },
+      "notes": "Add IF empty=false before this node if import skips null body"
+    },
+    {
+      "id": "parse",
+      "name": "Parse Digest",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if ($('Pack Subjects').item.json.empty) return [];\nconst raw = $json.choices?.[0]?.message?.content || '{}';\nlet c;\ntry { c = JSON.parse(raw); } catch { return []; }\nif (c.skip) return [];\nconst body = String(c.alert_body || c.whatsapp_body || '').slice(0, 3500);\nif (!body.trim()) return [];\nreturn [{ json: { alert_body: body } }];"
+      }
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram Digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_BOT_TOKEN}}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: $json.alert_body, disable_web_page_preview: true }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Every Evening": { "main": [[{ "node": "Gmail Last Day", "type": "main", "index": 0 }]] },
+    "Gmail Last Day": { "main": [[{ "node": "Pack Subjects", "type": "main", "index": 0 }]] },
+    "Pack Subjects": { "main": [[{ "node": "Groq Digest", "type": "main", "index": 0 }]] },
+    "Groq Digest": { "main": [[{ "node": "Parse Digest", "type": "main", "index": 0 }]] },
+    "Parse Digest": { "main": [[{ "node": "Telegram Digest", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "timezone": "Asia/Kolkata" },
+  "active": false
+}

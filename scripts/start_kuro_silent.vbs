@@ -8,8 +8,11 @@ If fso.FileExists(disableFlag) Then
 End If
 
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
-startPs1 = scriptDir & "\Start-Kuro.ps1"
+watchPs1 = scriptDir & "\Watch-KuroWifi.ps1"
+If Not fso.FileExists(watchPs1) Then
+  watchPs1 = scriptDir & "\Start-Kuro.ps1"
+End If
 
-' Always go through Start-Kuro.ps1 so duplicates are collapsed / skipped
-cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & startPs1 & """"
+' Prefer Wi-Fi watcher so Kuro only runs on home network
+cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & watchPs1 & """"
 WshShell.Run cmd, 0, False

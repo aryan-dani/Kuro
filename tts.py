@@ -21,9 +21,13 @@ import soundfile as sf
 import torch
 import torchaudio
 
+import compute_policy
 import config
 
 logger = logging.getLogger(__name__)
+
+_piper_voice = None
+_piper_lock = threading.Lock()
 
 # Agreement for Coqui Public Model License
 os.environ["COQUI_TOS_AGREED"] = "1"
@@ -203,20 +207,25 @@ def speak(text: str, *, fast: bool = False):
         except Exception:
             pass
 
-        engine = os.getenv("KURO_TTS_ENGINE", "auto").strip().lower()
+        engine = compute_policy.prefer_tts(fast=fast)
+        logger.info("TTS engine=%s mode=%s", engine, compute_policy.mode())
 
-        if engine == "pyttsx3":
-            _speak_pyttsx3(cleaned_text)
-            return
+        if engine == "piper":
+            try:
+                _speak_piper(cleaned_text)
+                return
+            except Exception as e:
+                logger.warning("Piper failed (%s); falling back", e)
+                engine = "xtts" if compute_policy.on_ac() and not fast else "pyttsx3"
 
-        if engine == "xtts" or is_ready() or engine == "auto":
-            if is_ready() or engine == "xtts":
+        if engine == "xtts":
+            if is_ready():
                 try:
                     _speak_xtts(cleaned_text)
                     return
                 except Exception as e:
                     logger.warning("XTTS failed (%s); falling back to pyttsx3", e)
-            elif not fast:
+            elif not fast and compute_policy.should_preload_xtts():
                 try:
                     _warm_xtts(blocking=True)
                     _speak_xtts(cleaned_text)
@@ -225,7 +234,7 @@ def speak(text: str, *, fast: bool = False):
                     logger.warning("XTTS warm/speak failed (%s)", e)
 
         _speak_pyttsx3(cleaned_text)
-        if not is_ready():
+        if engine == "xtts" and not is_ready() and compute_policy.should_preload_xtts():
             threading.Thread(
                 target=lambda: _warm_xtts(blocking=True), daemon=True, name="KuroXTTSWarm"
             ).start()
@@ -252,6 +261,50 @@ def _warm_xtts(blocking: bool = True) -> None:
         logger.info("XTTS warmed and ready on %s (%s)", get_device(), get_speaker_wav())
     except Exception:
         logger.exception("XTTS warm-up failed")
+
+
+def _get_piper_voice():
+    global _piper_voice
+    with _piper_lock:
+        if _piper_voice is not None:
+            return _piper_voice
+        from piper import PiperVoice
+
+        model = compute_policy.piper_model_path()
+        if not model:
+            raise FileNotFoundError("No Piper model (set KURO_PIPER_MODEL)")
+        logger.info("Loading Piper voice from %s", model)
+        _piper_voice = PiperVoice.load(model)
+        return _piper_voice
+
+
+def _speak_piper(cleaned_text: str) -> None:
+    """CPU Piper TTS — fast first audio for battery / thin-client mode."""
+    voice = _get_piper_voice()
+    start = time.perf_counter()
+    chunks: list[np.ndarray] = []
+    sample_rate = 22050
+    for chunk in voice.synthesize(cleaned_text):
+        # piper chunk: AudioChunk with audio_int16_array / sample_rate
+        sr = getattr(chunk, "sample_rate", None) or sample_rate
+        sample_rate = int(sr)
+        arr = getattr(chunk, "audio_int16_array", None)
+        if arr is None:
+            arr = getattr(chunk, "audio_float_array", None)
+            if arr is None:
+                continue
+            audio = np.asarray(arr, dtype=np.float32)
+        else:
+            audio = np.asarray(arr, dtype=np.float32) / 32768.0
+        chunks.append(audio)
+    if not chunks:
+        raise RuntimeError("Piper produced no audio")
+    audio_data = np.concatenate(chunks)
+    peak = float(np.max(np.abs(audio_data))) + 1e-8
+    audio_data = np.clip(audio_data * (0.9 / peak), -1.0, 1.0)
+    logger.info("Piper synthesis %.2fs", time.perf_counter() - start)
+    sd.play(audio_data, samplerate=sample_rate)
+    sd.wait()
 
 
 def _speak_xtts(cleaned_text: str) -> None:

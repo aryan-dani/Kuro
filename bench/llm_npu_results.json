@@ -1,0 +1,105 @@
+{
+  "generated": "2026-11-02 14:44:00",
+  "results": [
+    {
+      "ok": true,
+      "device": "NPU",
+      "model": "bench\\models\\qwen2.5-0.5b-instruct-int8",
+      "compile_sec": 13.307439299998805,
+      "tokens_per_sec_mean": 0.19367120615414243,
+      "intent_accuracy": 0.4,
+      "rows": [
+        {
+          "expected": "power_on",
+          "pred": "power_on",
+          "ok": true,
+          "output": "power_on",
+          "sec": 5.131102700019255,
+          "tps": 0.19488988205132735
+        },
+        {
+          "expected": "power_off",
+          "pred": "power_off",
+          "ok": true,
+          "output": "power_off",
+          "sec": 5.1309659000253305,
+          "tps": 0.19489507813627513
+        },
+        {
+          "expected": "news",
+          "pred": "power_on",
+          "ok": false,
+          "output": "power_on",
+          "sec": 5.20169330004137,
+          "tps": 0.19224509065000944
+        },
+        {
+          "expected": "inbox",
+          "pred": "power_off",
+          "ok": false,
+          "output": "power_off",
+          "sec": 5.257779399980791,
+          "tps": 0.19019436228223144
+        },
+        {
+          "expected": "none",
+          "pred": "power_on",
+          "ok": false,
+          "output": "power_on",
+          "sec": 5.098617000039667,
+          "tps": 0.19613161765086887
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "device": "CPU",
+      "model": "bench\\models\\qwen2.5-0.5b-instruct-int8",
+      "compile_sec": 1.3554477999568917,
+      "tokens_per_sec_mean": 20.233183903783424,
+      "intent_accuracy": 0.4,
+      "rows": [
+        {
+          "expected": "power_on",
+          "pred": "power_on",
+          "ok": true,
+          "output": "power_on",
+          "sec": 0.07119839999359101,
+          "tps": 14.045259445296747
+        },
+        {
+          "expected": "power_off",
+          "pred": "power_off",
+          "ok": true,
+          "output": "power_off",
+          "sec": 0.04809100000420585,
+          "tps": 20.79391154088174
+        },
+        {
+          "expected": "news",
+          "pred": "power_on",
+          "ok": false,
+          "output": "power_on",
+          "sec": 0.0452872000169009,
+          "tps": 22.081294485567806
+        },
+        {
+          "expected": "inbox",
+          "pred": "power_off",
+          "ok": false,
+          "output": "power_off",
+          "sec": 0.04548670002259314,
+          "tps": 21.984448190422746
+        },
+        {
+          "expected": "none",
+          "pred": "power_on",
+          "ok": false,
+          "output": "power_on",
+          "sec": 0.044921599968802184,
+          "tps": 22.261005856748085
+        }
+      ]
+    }
+  ]
+}

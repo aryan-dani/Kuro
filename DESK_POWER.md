@@ -14,3 +14,11 @@ Do **not** put the router on the switched board — if Wi‑Fi dies when the boa
 - “Turn on/off the lights”, “monitor on/off”, “desk on/off” → plug scenes `power_on` / `power_off`
 - “Good night” → board off + stop music
 - “Wake up daddy’s home” → board on + song
+
+## Cloud inbox (separate)
+
+Email → Telegram triage runs in **n8n Cloud**, not on this board. See [docs/CLOUD_INBOX.md](docs/CLOUD_INBOX.md).
+
+## Away from home
+
+Autostart runs the **Wi‑Fi watcher** (`scripts/Watch-KuroWifi.ps1`): Kuro starts only on home SSID and stops when you leave, so GPU/STT/TTS do not drain battery on campus/coffee Wi‑Fi. See [docs/WIFI_WATCH.md](docs/WIFI_WATCH.md).

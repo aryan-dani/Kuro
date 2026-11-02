@@ -22,6 +22,41 @@ Personality guidelines:
 
 _brain: "Brain | None" = None
 
+# Tools that must stay on the laptop even if the hub also lists something similar.
+_LOCAL_ONLY = {"read_screen", "check_inbox"}
+
+
+def _merged_tool_specs() -> list[dict]:
+    """Local tools plus hub schemas; hub wins for shared names except local-only."""
+    import hub_client
+
+    local = {t["function"]["name"]: t for t in tools.get_tool_definitions() if "function" in t}
+    for spec in hub_client.list_tools():
+        try:
+            name = spec["function"]["name"]
+        except Exception:
+            continue
+        if name in _LOCAL_ONLY:
+            continue
+        local[name] = spec
+    return list(local.values())
+
+
+def _hub_tool_names(specs: list[dict]) -> set[str]:
+    import hub_client
+
+    if not hub_client.configured():
+        return set()
+    names = set()
+    for spec in hub_client.list_tools():
+        try:
+            name = spec["function"]["name"]
+        except Exception:
+            continue
+        if name not in _LOCAL_ONLY:
+            names.add(name)
+    return names
+
 
 class Brain:
     def __init__(self, model_name: str | None = None):
@@ -40,7 +75,8 @@ class Brain:
             {"role": "user", "content": user_text},
         ]
 
-        tool_specs = tools.get_tool_definitions()
+        tool_specs = _merged_tool_specs()
+        hub_tool_names = _hub_tool_names(tool_specs)
 
         try:
             response = self.client.chat(
@@ -81,7 +117,12 @@ class Brain:
                 except Exception:
                     pass
 
-            result_text = tools.execute_tool(name, arguments or {})
+            if name in hub_tool_names:
+                import hub_client
+
+                result_text = hub_client.execute_tool(name, arguments or {})
+            else:
+                result_text = tools.execute_tool(name, arguments or {})
             messages.append({"role": "tool", "content": result_text})
 
             if result_text.startswith("Success:"):

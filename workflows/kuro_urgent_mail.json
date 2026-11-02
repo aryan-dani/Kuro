@@ -1,0 +1,106 @@
+{
+  "name": "Kuro Urgent Mail",
+  "meta": {
+    "templateCredsSetupRequired": true,
+    "description": "Gmail new mail → Groq classify → Telegram if high or deadline. Import into n8n Cloud, attach Gmail + Groq creds, set TELEGRAM_* env vars.",
+    "promptFile": "prompts/groq_classify.txt",
+    "rateLimitNote": "Caps ~6 alerts/hour via workflow static data.",
+    "delivery": "telegram"
+  },
+  "nodes": [
+    {
+      "id": "gmail_trigger",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "simple": true,
+        "filters": { "readStatus": "unread", "includeSpamTrash": false }
+      },
+      "notes": "Credential: Gmail OAuth2"
+    },
+    {
+      "id": "normalize",
+      "name": "Normalize Mail",
+      "type": "n8n-nodes-base.set",
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "messageId", "value": "={{ $json.id }}" },
+            { "name": "threadId", "value": "={{ $json.threadId }}" },
+            { "name": "from", "value": "={{ $json.from }}" },
+            { "name": "subject", "value": "={{ $json.subject }}" },
+            { "name": "snippet", "value": "={{ $json.snippet || $json.textPlain || '' }}" },
+            { "name": "date", "value": "={{ $json.date }}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "dedup",
+      "name": "Dedup Seen",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.seen = staticData.seen || {};\nconst id = String($json.messageId || '');\nif (!id) return [];\nif (staticData.seen[id]) return [];\nstaticData.seen[id] = Date.now();\nconst cutoff = Date.now() - 7 * 24 * 3600 * 1000;\nfor (const k of Object.keys(staticData.seen)) {\n  if (staticData.seen[k] < cutoff) delete staticData.seen[k];\n}\nreturn [$json];"
+      }
+    },
+    {
+      "id": "groq",
+      "name": "Groq Classify",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: $env.KURO_GROQ_CLASSIFY_PROMPT || 'See workflows/prompts/groq_classify.txt' }, { role: 'user', content: `From: ${$json.from}\\nSubject: ${$json.subject}\\nDate: ${$json.date}\\nBody: ${String($json.snippet).slice(0, 2500)}` } ] }) }}"
+      },
+      "notes": "Credential: Header Auth Authorization = Bearer <GROQ_API_KEY>"
+    },
+    {
+      "id": "parse",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const raw = $json.choices?.[0]?.message?.content || '{}';\nlet c;\ntry { c = JSON.parse(raw); } catch { return []; }\nconst priority = String(c.priority || 'low').toLowerCase();\nconst hasDeadline = Boolean(c.has_deadline);\nif (priority !== 'high' && !hasDeadline) return [];\nconst line = String(c.alert_line || c.whatsapp_line || '').slice(0, 200);\nreturn [{\n  json: {\n    ...c,\n    priority,\n    has_deadline: hasDeadline,\n    alert_line: line,\n    from: $('Normalize Mail').item.json.from,\n    subject: $('Normalize Mail').item.json.subject,\n    messageId: $('Normalize Mail').item.json.messageId\n  }\n}];"
+      }
+    },
+    {
+      "id": "rate_limit",
+      "name": "Rate Limit Hour",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.hourly = staticData.hourly || [];\nconst now = Date.now();\nstaticData.hourly = staticData.hourly.filter((t) => now - t < 3600 * 1000);\nif (staticData.hourly.length >= 6) return [];\nstaticData.hourly.push(now);\nreturn [$json];"
+      }
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_BOT_TOKEN}}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: 'Kuro: ' + ($json.alert_line || $json.subject || 'Urgent mail'), disable_web_page_preview: true }) }}"
+      },
+      "notes": "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in n8n variables. Bot must have received /start from you."
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": { "main": [[{ "node": "Normalize Mail", "type": "main", "index": 0 }]] },
+    "Normalize Mail": { "main": [[{ "node": "Dedup Seen", "type": "main", "index": 0 }]] },
+    "Dedup Seen": { "main": [[{ "node": "Groq Classify", "type": "main", "index": 0 }]] },
+    "Groq Classify": { "main": [[{ "node": "Parse Classification", "type": "main", "index": 0 }]] },
+    "Parse Classification": { "main": [[{ "node": "Rate Limit Hour", "type": "main", "index": 0 }]] },
+    "Rate Limit Hour": { "main": [[{ "node": "Telegram Alert", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

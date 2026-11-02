@@ -35,8 +35,19 @@ snapshot.json
 # Heavy local assets (download/warm separately)
 models/
 .venv/
+.venv-npu/
 venv/
 env/
+
+# Bench artifacts (keep scripts + summary results; ignore heavy/local run junk)
+bench/data/
+bench/cache/
+bench/models/
+bench/*.log
+bench/results.json
+bench/parity_results.json
+bench/battery_discharge.json
+
 
 # Nested third-party checkout (has its own git history)
 Bruno/

@@ -1,0 +1,93 @@
+{
+  "name": "Kuro Inbox Webhook",
+  "meta": {
+    "templateCredsSetupRequired": true,
+    "description": "HTTP webhook for laptop Kuro: returns latest high-priority items + digest summary. Protect with header X-Kuro-Secret.",
+    "kuroEnv": ["N8N_INBOX_WEBHOOK_URL", "N8N_WEBHOOK_SECRET"]
+  },
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Inbox Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "path": "kuro-inbox",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "notes": "Production URL becomes N8N_INBOX_WEBHOOK_URL in Kuro .env"
+    },
+    {
+      "id": "auth",
+      "name": "Check Secret",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const secret = $env.KURO_WEBHOOK_SECRET || '';\nconst got = $json.headers?.['x-kuro-secret'] || $json.headers?.['X-Kuro-Secret'] || '';\nif (!secret || got !== secret) {\n  return [{ json: { ok: false, error: 'unauthorized', status: 401 } }];\n}\nconst mode = ($json.body?.mode || $json.query?.mode || 'summary').toString();\nreturn [{ json: { ok: true, mode } }];"
+      }
+    },
+    {
+      "id": "gmail_urgent",
+      "name": "Gmail Open Important",
+      "type": "n8n-nodes-base.gmail",
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 10,
+        "filters": {
+          "q": "is:unread newer_than:2d -category:promotions -category:social"
+        }
+      },
+      "notes": "Runs when authorized; keep limit small"
+    },
+    {
+      "id": "groq_summary",
+      "name": "Groq Voice Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0.2, messages: [ { role: 'system', content: 'Summarize the user inbox list for spoken TTS. Reply with 1-2 short sentences. No markdown. If empty say there is nothing urgent.' }, { role: 'user', content: $input.all().map(i => `${i.json.from}: ${i.json.subject}`).join('\\n') || 'No unread important mail.' } ] }) }}"
+      }
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, spoken: $json.choices?.[0]?.message?.content?.trim() || 'No urgent mail.', items: $('Gmail Open Important').all().slice(0, 5).map(i => ({ from: i.json.from, subject: i.json.subject })) }) }}"
+      }
+    },
+    {
+      "id": "respond_err",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "options": { "responseCode": 401 },
+        "responseBody": "={{ JSON.stringify({ ok: false, error: 'unauthorized' }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Inbox Webhook": { "main": [[{ "node": "Check Secret", "type": "main", "index": 0 }]] },
+    "Check Secret": {
+      "main": [
+        [
+          { "node": "Gmail Open Important", "type": "main", "index": 0 },
+          { "node": "Respond Unauthorized", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Gmail Open Important": { "main": [[{ "node": "Groq Voice Summary", "type": "main", "index": 0 }]] },
+    "Groq Voice Summary": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "notes": "After import: wire IF on Check Secret ok===true → Gmail path, else → Respond Unauthorized. Copy Production webhook URL into Kuro N8N_INBOX_WEBHOOK_URL."
+}

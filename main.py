@@ -13,6 +13,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
 
 import numpy as np
@@ -20,6 +21,7 @@ import sounddevice as sd
 import soundfile as sf
 
 import config
+import hub_client
 import phrases
 from overlay import OverlayManager, OverlayState
 from tray import KuroState, TrayManager
@@ -160,14 +162,6 @@ def _transcribe(audio_path: str, partial: bool = False) -> str:
     """STT with a hard timeout so a hung GPU decode can't lock the hotkey forever."""
     from stt import transcribe
 
-    if not partial:
-        try:
-            import gpu_boost
-
-            gpu_boost.kick("stt")
-        except Exception:
-            pass
-
     result: dict[str, str] = {"text": ""}
     error: list[BaseException] = []
 
@@ -249,18 +243,39 @@ def _partial_transcribe_loop() -> None:
                 if (not _early_home_fired) and phrases.looks_like_daddys_home(last_text):
                     _early_home_fired = True
                     logger.info("Early daddy's home match — firing now")
-                    if overlay_manager:
-                        overlay_manager.set_transcript(kuro="Welcome home, sir.")
-                        overlay_manager.set_state(OverlayState.SPEAKING, subtitle="Welcome home")
-                    if phrases.fire_daddys_home_parallel():
-                        threading.Thread(
-                            target=_speak,
-                            kwargs={"text": "Welcome home, sir.", "fast": False},
-                            daemon=True,
-                            name="KuroHomeSpeak",
-                        ).start()
+                    threading.Thread(
+                        target=_early_hub_or_local_home,
+                        args=(last_text,),
+                        daemon=True,
+                        name="KuroEarlyHome",
+                    ).start()
         except Exception as e:
             logger.debug("Partial STT skipped: %s", e)
+
+
+def _early_hub_or_local_home(text: str) -> None:
+    """Fire daddy's home via hub (preferred) or local plug+song fallback."""
+    if hub_client.configured():
+        result = hub_client.command(text, early=True)
+        if result is None:
+            _speak("I can't reach the hub.")
+            return
+        if result.get("duplicate"):
+            return
+        if result.get("handled"):
+            reply = result.get("reply") or "Welcome home, sir."
+            if overlay_manager:
+                overlay_manager.set_transcript(kuro=reply)
+                overlay_manager.set_state(OverlayState.SPEAKING, subtitle="Welcome home")
+            hub_client.apply_client_actions(result.get("client_actions") or [])
+            _speak(reply)
+            return
+
+    if overlay_manager:
+        overlay_manager.set_transcript(kuro="Welcome home, sir.")
+        overlay_manager.set_state(OverlayState.SPEAKING, subtitle="Welcome home")
+    if phrases.fire_daddys_home_parallel():
+        _speak("Welcome home, sir.")
 
 
 def start_push_to_talk() -> None:
@@ -321,12 +336,6 @@ def start_push_to_talk() -> None:
     threading.Thread(target=_partial_transcribe_loop, daemon=True, name="KuroPartialSTT").start()
 
     logger.info("PTT recording started.")
-    try:
-        import gpu_boost
-
-        gpu_boost.kick("ptt")
-    except Exception:
-        pass
     if tray_manager:
         tray_manager.set_state(KuroState.LISTENING)
     if overlay_manager:
@@ -418,8 +427,72 @@ def record_fixed(duration: float) -> str:
     return _save_wav(recording)
 
 
+def _is_music_only_phrase(text: str) -> bool:
+    t = phrases._normalize(text)
+    return phrases._is_pause(t) or phrases._is_resume(t) or phrases._is_stop_music(t)
+
+
+def _is_hub_desk_phrase(text: str) -> bool:
+    t = phrases._normalize(text)
+    return any(
+        (
+            phrases._is_daddys_home(t),
+            phrases._is_goodnight(t),
+            phrases._is_power_on(t),
+            phrases._is_power_off(t),
+            phrases._is_news(t),
+        )
+    )
+
+
+def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
+    """Hub first for desk rituals; inbox + LLM stay local. Returns reply, skip_tts, after_speak, force_fast."""
+    if hub_client.configured():
+        result = hub_client.command(user_prompt, early=False)
+        if result is None:
+            if _is_music_only_phrase(user_prompt):
+                local = phrases.try_handle(user_prompt)
+                if local is not None:
+                    if overlay_manager:
+                        overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
+                    return local.reply, local.skip_tts, local.after_speak, local.force_fast_tts
+            if _is_hub_desk_phrase(user_prompt):
+                if overlay_manager:
+                    overlay_manager.set_state(OverlayState.THINKING, subtitle="Hub offline")
+                return "I can't reach the hub.", False, None, False
+            # fall through to inbox / LLM
+        elif result.get("duplicate"):
+            if overlay_manager:
+                overlay_manager.set_state(OverlayState.DONE, subtitle="Already handled", hold_ms=800)
+            return "", True, None, False
+        elif result.get("handled"):
+            if overlay_manager:
+                overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
+            hub_client.apply_client_actions(result.get("client_actions") or [])
+            return result.get("reply") or "", False, None, False
+
+    # Local inbox + any remaining local phrases, then LLM
+    handled = phrases.try_handle(user_prompt)
+    if handled is not None:
+        if overlay_manager:
+            overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
+        return handled.reply, handled.skip_tts, handled.after_speak, handled.force_fast_tts
+
+    mode = config.KURO_LLM_MODE
+    if mode == "off":
+        if overlay_manager:
+            overlay_manager.set_state(OverlayState.THINKING, subtitle="No match")
+        return "No command matched.", False, None, False
+
+    import brain
+
+    if overlay_manager:
+        overlay_manager.set_state(OverlayState.THINKING, subtitle="Thinking...")
+    return brain.think(user_prompt), False, None, False
+
+
 def process_audio_file(audio_file: str) -> None:
-    """Transcribe -> fast phrases / brain -> speak."""
+    """Transcribe -> hub / phrases / brain -> speak."""
     global is_processing, _live_transcript, _early_home_fired, _processing_started_at
     with process_lock:
         if is_processing:
@@ -471,33 +544,7 @@ def process_audio_file(audio_file: str) -> None:
         if overlay_manager:
             overlay_manager.set_transcript(you=user_prompt)
 
-        handled = phrases.try_handle(user_prompt)
-        if handled is not None:
-            reply = handled.reply
-            skip_tts = handled.skip_tts
-            after_speak = handled.after_speak
-            force_fast = handled.force_fast_tts
-            if overlay_manager:
-                overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
-        else:
-            mode = config.KURO_LLM_MODE
-            if mode == "off":
-                reply = "No command matched."
-                skip_tts = False
-                after_speak = None
-                force_fast = False
-                if overlay_manager:
-                    overlay_manager.set_state(OverlayState.THINKING, subtitle="No match")
-            else:
-                # Lazy Ollama — only imported on freeform fallback / always
-                import brain
-
-                if overlay_manager:
-                    overlay_manager.set_state(OverlayState.THINKING, subtitle="Thinking...")
-                reply = brain.think(user_prompt)
-                skip_tts = False
-                after_speak = None
-                force_fast = False
+        reply, skip_tts, after_speak, force_fast = _route_command(user_prompt)
 
         logger.info('Kuro: "%s"', reply)
 
@@ -648,17 +695,15 @@ def on_quit() -> None:
     print("\n[Kuro] Shutting down...")
     stop_event.set()
     try:
+        hub_client.stop_event_worker()
+    except Exception:
+        pass
+    try:
         stop_push_to_talk()
     except Exception:
         pass
     if overlay_manager:
         overlay_manager.stop()
-    try:
-        import gpu_boost
-
-        gpu_boost.stop()
-    except Exception:
-        pass
     os._exit(0)
 
 
@@ -706,38 +751,52 @@ def main() -> None:
 
     def _warm_xtts():
         try:
+            import compute_policy
             import tts
 
+            if not compute_policy.should_preload_xtts():
+                print("[Kuro] Skipping XTTS preload (battery / Piper mode).")
+                return
             print("[Kuro] Loading natural voice (XTTS) onto GPU...")
             tts._warm_xtts(blocking=True)
             print("[Kuro] Natural voice ready.")
         except Exception:
             logger.exception("XTTS warm-up failed")
 
-    def _start_gpu_boost():
+    def _boot_policy():
         try:
-            import gpu_boost
+            import compute_policy
 
-            gpu_boost.start()
-            rep = gpu_boost.device_report()
+            rep = compute_policy.device_report()
             print(
-                f"[Kuro] GPU: cuda={rep.get('cuda')} "
-                f"stt={rep.get('stt_device')} "
+                f"[Kuro] Compute: mode={rep.get('mode')} stt={rep.get('stt')} "
+                f"tts={rep.get('tts')} cuda={rep.get('cuda')} "
                 f"charging={rep.get('power', {}).get('is_charging')} "
                 f"batt={rep.get('power', {}).get('battery_percent')}%"
             )
         except Exception:
-            logger.exception("GPU boost failed to start")
+            logger.exception("Compute policy report failed")
 
     threading.Thread(target=_warm_stt, daemon=True, name="KuroSTTWarm").start()
     threading.Thread(target=_warm_audio, daemon=True, name="KuroAudioWarm").start()
     threading.Thread(target=_warm_xtts, daemon=True, name="KuroXTTSWarm").start()
-    threading.Thread(target=_start_gpu_boost, daemon=True, name="KuroGpuBoostBoot").start()
+    threading.Thread(target=_boot_policy, daemon=True, name="KuroPolicyBoot").start()
 
     tray_manager = TrayManager(on_trigger=on_tray_trigger, on_quit=on_quit)
     tray_manager.start()
     print("[Kuro] Tray + overlay ready.")
     print(f"[Kuro] HOLD {config.KURO_HOTKEY}, speak, then RELEASE.")
+
+    if hub_client.configured():
+        print(f"[Kuro] Hub: {config.KURO_HUB_URL}")
+
+        def _hub_notify(text: str) -> None:
+            if overlay_manager:
+                overlay_manager.flash("Kuro", text[:80], hold_ms=2500)
+
+        hub_client.start_event_worker(speak=_speak, notify=_hub_notify)
+    else:
+        print("[Kuro] Hub: not configured (set KURO_HUB_TOKEN in .env)")
 
     try:
         register_push_to_talk(config.KURO_HOTKEY)

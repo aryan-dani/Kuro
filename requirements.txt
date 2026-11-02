@@ -16,4 +16,5 @@ tinytuya>=1.14.0
 pystray>=0.19.5
 pygame>=2.5.0
 pyttsx3>=2.90
+websocket-client>=1.8.0
 

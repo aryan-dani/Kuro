@@ -35,8 +35,9 @@ $s.Save()
 """
     res = subprocess.run(["powershell", "-NoProfile", "-Command", ps_code], capture_output=True, text=True)
     if os.path.exists(shortcut_path):
-        print("\n[SUCCESS] Kuro is now set to start automatically whenever Windows boots!")
-        print("It will run silently in your system tray without popping up any terminal window.")
+        print("\n[SUCCESS] Startup shortcut created (Wi-Fi watcher via start_kuro_silent.vbs).")
+        print("Kuro starts only on home Wi-Fi — set %LOCALAPPDATA%\\Kuro\\home_ssid.txt first.")
+        print("Prefer: powershell -File scripts\\Install-KuroAutostart.ps1 -HomeSsid YourWifi -StartNow")
     else:
         print(f"\n[ERROR] Failed to create startup shortcut: {res.stderr}")
 

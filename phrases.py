@@ -44,12 +44,45 @@ def _normalize(text: str) -> str:
         "moniter": "monitor",
         "monitors": "monitor",
         "extention": "extension",
+        # ASR often drops the second f: "monitor of" / "lights of"
+        "monitor of": "monitor off",
+        "screen of": "screen off",
+        "display of": "display off",
+        "desk of": "desk off",
+        "lights of": "lights off",
+        "light of": "light off",
+        "plug of": "plug off",
+        "power of": "power off",
+        "board of": "board off",
+        # Harmless ASR garble that still ends in off (never maps off→on)
+        "let's off": "desk off",
+        "lets off": "desk off",
+        "let s off": "desk off",
+        "next off": "desk off",
+        "bob it off": "power off",
+        "urgent man": "urgent mail",
+        "urgent men": "urgent mail",
     }
     for a, b in replacements.items():
         text = text.replace(a, b)
     text = re.sub(r"[^a-z0-9\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
+    # Second pass after punctuation strip (ASR often emits Let's Off!)
+    post = {
+        "lets off": "desk off",
+        "let s off": "desk off",
+        "next off": "desk off",
+        "bob it off": "power off",
+    }
+    for a, b in post.items():
+        if a in text:
+            text = text.replace(a, b)
     return text
+
+
+def _has_word(t: str, word: str) -> bool:
+    """Whole-word match so 'on' does not hit inside 'monitor'."""
+    return re.search(rf"\b{re.escape(word)}\b", t) is not None
 
 
 def looks_like_daddys_home(text: str) -> bool:
@@ -105,6 +138,7 @@ def matches(text: str) -> bool:
             _is_power_off(t),
             _is_power_on(t),
             _is_news(t),
+            _is_inbox(t),
         )
     )
 
@@ -146,6 +180,11 @@ def try_handle(text: str) -> PhraseResult | None:
         topic = _news_topic(t)
         raw = tools.execute_tool("get_news", {"topic": topic})
         return PhraseResult(_news_to_speech(raw))
+
+    if _is_inbox(t):
+        mode = _inbox_mode(t)
+        raw = tools.execute_tool("check_inbox", {"mode": mode})
+        return PhraseResult(_inbox_to_speech(raw))
 
     return None
 
@@ -240,6 +279,9 @@ def _is_daddys_home(t: str) -> bool:
 
 
 def _is_power_off(t: str) -> bool:
+    # Prefer explicit off phrases; never treat "of"/"on" as off here.
+    if _has_word(t, "on") and not _has_word(t, "off"):
+        return False
     if any(
         p in t
         for p in (
@@ -256,7 +298,7 @@ def _is_power_off(t: str) -> bool:
         )
     ):
         return True
-    if "off" in t and _desk_keywords(t):
+    if _has_word(t, "off") and _desk_keywords(t):
         return True
     if "turn off" in t or "switch off" in t:
         return True
@@ -264,7 +306,8 @@ def _is_power_off(t: str) -> bool:
 
 
 def _is_power_on(t: str) -> bool:
-    if "off" in t:
+    # Whole-word "off" wins — never promote an off command to on.
+    if _has_word(t, "off"):
         return False
     if any(
         p in t
@@ -281,7 +324,8 @@ def _is_power_on(t: str) -> bool:
         )
     ):
         return True
-    if "on" in t and _desk_keywords(t):
+    # Word-boundary "on" only — substring match falsely hit "monitor".
+    if _has_word(t, "on") and _desk_keywords(t):
         return True
     if "turn on" in t or "switch on" in t:
         return True
@@ -289,6 +333,9 @@ def _is_power_on(t: str) -> bool:
 
 
 def _is_news(t: str) -> bool:
+    # Avoid stealing inbox queries that mention "updates" about mail
+    if _is_inbox(t):
+        return False
     return any(
         p in t
         for p in (
@@ -300,6 +347,49 @@ def _is_news(t: str) -> bool:
             "any updates",
         )
     )
+
+
+def _is_inbox(t: str) -> bool:
+    return any(
+        p in t
+        for p in (
+            "urgent mail",
+            "urgent email",
+            "any urgent",
+            "inbox check",
+            "check inbox",
+            "check my inbox",
+            "check my email",
+            "check my mail",
+            "check email",
+            "check mail",
+            "deadlines today",
+            "any deadlines",
+            "my deadlines",
+            "important email",
+            "important mail",
+            "important emails",
+            "missed email",
+            "missed mail",
+        )
+    )
+
+
+def _inbox_mode(t: str) -> str:
+    if "deadline" in t:
+        return "deadlines"
+    if "urgent" in t or "important" in t:
+        return "urgent"
+    return "summary"
+
+
+def _inbox_to_speech(raw: str) -> str:
+    if not raw or not str(raw).strip():
+        return "I couldn't reach the cloud inbox."
+    text = str(raw).strip()
+    if len(text) > 280:
+        return text[:277].rstrip() + "..."
+    return text
 
 
 def _news_topic(t: str) -> str:
