@@ -17,4 +17,12 @@ pystray>=0.19.5
 pygame>=2.5.0
 pyttsx3>=2.90
 websocket-client>=1.8.0
+pyautogui>=0.9.54
+pyperclip>=1.8.2
+neonize>=0.10.0
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.1.1
+google-auth-oauthlib>=1.1.0
+fastapi>=0.115.0
+uvicorn>=0.32.0
 
