@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import time
+
+_LAUNCH = time.perf_counter()
+
 import singleton
 
 if not singleton.acquire():
@@ -10,4 +14,5 @@ if not singleton.acquire():
 # Safe to load the heavy stack now — we own the mutex
 import main as kuro_main
 
+kuro_main._BOOT_TICK = _LAUNCH
 kuro_main.main()
