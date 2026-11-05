@@ -48,6 +48,7 @@ SCENES = {
 
 _CACHE = Path(os.environ.get("LOCALAPPDATA", ".")) / "Kuro" / "tuya_endpoint.json"
 _VERSIONS = (3.5, 3.4, 3.3, 3.1)
+_live = None
 
 
 def _load_cache() -> dict:
@@ -114,6 +115,13 @@ def _status_ok(data: Any) -> bool:
 
 def _connect() -> tuple[Any, str]:
     """Return (device, human_error). device is None on failure."""
+    global _live
+    if _live is not None:
+        try:
+            if _status_ok(_live.status()):
+                return _live, ""
+        except Exception:
+            _live = None
     last_err = "unreachable"
     for ip in _candidate_ips():
         for ver in _candidate_versions():
@@ -123,6 +131,11 @@ def _connect() -> tuple[Any, str]:
                 if _status_ok(st):
                     resolved = getattr(plug, "address", ip) or ip
                     logger.info("Tuya plug online at %s (v%s)", resolved, ver)
+                    try:
+                        plug.set_socketPersistent(True)
+                    except Exception:
+                        pass
+                    _live = plug
                     if resolved and resolved != "Auto":
                         _save_cache(str(resolved), float(ver))
                     return plug, ""
@@ -132,6 +145,23 @@ def _connect() -> tuple[Any, str]:
                 last_err = str(e)
                 logger.debug("Tuya %s v%s exc: %s", ip, ver, e)
     return None, last_err
+
+
+def probe_status() -> str:
+    """Read the plug. Does not change the relay."""
+    import timing
+
+    started = timing.tick()
+    try:
+        plug, _err = _connect()
+        if plug is None:
+            return "unreachable"
+        plug.status()
+        return "ok"
+    except Exception:
+        return "unreachable"
+    finally:
+        timing.once("plug", "status", timing.since(started))
 
 
 def run(arguments: dict[str, Any]) -> str:
