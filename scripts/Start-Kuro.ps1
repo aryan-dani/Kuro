@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
   Starts Kuro in the background (tray + hotkey). Safe to run at Windows logon.
@@ -43,18 +43,9 @@ if (Test-Path -LiteralPath $DisableFlag) {
         Write-KuroLog "Cleared DISABLED flag (ForceRestart re-enable)."
     }
     else {
-        Write-KuroLog "Kuro DISABLED — refusing start (Start-Kuro.ps1 -ForceRestart to re-enable)."
+        Write-KuroLog "Kuro DISABLED. Refusing start (Start-Kuro.ps1 -ForceRestart to re-enable)."
         exit 0
     }
-}
-
-function Write-KuroLog {
-    param([string]$Message)
-    if (-not (Test-Path -LiteralPath $LogDir)) {
-        New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
-    }
-    $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    Add-Content -LiteralPath $LogFile -Value ("[{0}] {1}" -f $stamp, $Message)
 }
 
 function Get-KuroProcesses {
@@ -65,6 +56,33 @@ function Get-KuroProcesses {
             ($_.CommandLine -match 'Kuro') -and
             ($_.CommandLine -match '(run_kuro|main)\.py')
         }
+}
+
+function Test-KuroMutexHeld {
+    # True when another process already owns Global\KuroAssistantSingleton.v1.
+    $m = $null
+    try {
+        $m = New-Object System.Threading.Mutex($false, "Global\KuroAssistantSingleton.v1")
+        try {
+            $got = $m.WaitOne(0)
+        }
+        catch [System.Threading.AbandonedMutexException] {
+            try { $m.ReleaseMutex() } catch { }
+            return $false
+        }
+        if ($got) {
+            try { $m.ReleaseMutex() } catch { }
+            return $false
+        }
+        return $true
+    }
+    catch {
+        Write-KuroLog ("Mutex probe failed: {0}" -f $_.Exception.Message)
+        return $false
+    }
+    finally {
+        if ($m) { $m.Dispose() }
+    }
 }
 
 function Stop-KuroProcesses {
@@ -96,7 +114,7 @@ function Start-OllamaBackend {
         if ($cmd) { $ollama = $cmd.Source }
     }
     if (-not (Test-Path -LiteralPath $ollama)) {
-        Write-KuroLog "Ollama not installed — skip backend start"
+        Write-KuroLog "Ollama not installed. Skip backend start"
         return
     }
 
@@ -133,21 +151,8 @@ function Start-OllamaBackend {
     }
     catch { }
 
-    if ($llmMode -eq "always") {
-        $warm = @"
-try {
-  `$body = @{ model = '$model'; prompt = 'hi'; stream = `$false; options = @{ num_predict = 1 } } | ConvertTo-Json
-  Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/generate' -Method Post -Body `$body -ContentType 'application/json' -TimeoutSec 180 | Out-Null
-} catch {}
-"@
-        Start-Process -FilePath "powershell.exe" -ArgumentList @(
-            "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", $warm
-        ) -WindowStyle Hidden | Out-Null
-        Write-KuroLog ("Ollama model warm kicked off: {0}" -f $model)
-    }
-    else {
-        Write-KuroLog ("Ollama serve ready; skipping model warm (KURO_LLM_MODE={0})" -f $llmMode)
-    }
+    # Never preload an Ollama model at logon. That pins VRAM before Kuro is asked to talk.
+    Write-KuroLog ("Ollama serve ready; model warm skipped (KURO_LLM_MODE={0})" -f $llmMode)
 }
 
 try {
@@ -166,28 +171,21 @@ try {
         throw ("Virtualenv Python not found. Expected: {0}" -f $Python)
     }
 
-    # Backend first — Kuro brain depends on it
+    # Backend first. Kuro brain depends on it.
     Start-OllamaBackend
 
     $existing = @(Get-KuroProcesses)
     # The Windows venv launcher (Scripts\pythonw.exe) often keeps a child
-    # pythonw from Python311 home — that pair is ONE instance, not a duplicate.
-    $launchers = @($existing | Where-Object {
-        ($_.ExecutablePath -and ($_.ExecutablePath -match '\\.venv\\Scripts\\pythonw?\.exe$')) -or
-        ($_.CommandLine -match '\\.venv\\Scripts\\pythonw?\.exe')
-    })
+    # pythonw from Python311 home. That pair is ONE instance, not a duplicate.
     if ($ForceRestart) {
         $n = Stop-KuroProcesses
         Write-KuroLog ("ForceRestart cleared {0} process(es)" -f $n)
+        Start-Sleep -Milliseconds 400
     }
-    elseif ($launchers.Count -ge 1) {
-        Write-KuroLog ("Kuro already running PID={0} - skip start." -f $launchers[0].ProcessId)
+    elseif ((Test-KuroMutexHeld) -or ($existing.Count -gt 0)) {
+        $pidShown = if ($existing.Count -gt 0) { $existing[0].ProcessId } else { "mutex" }
+        Write-KuroLog ("Kuro already running ({0}) - skip start." -f $pidShown)
         exit 0
-    }
-    elseif ($existing.Count -gt 0) {
-        # Orphaned home-python copies with no venv parent — clear then start
-        Write-KuroLog ("Found {0} orphan Kuro process(es) — clearing" -f $existing.Count)
-        Stop-KuroProcesses | Out-Null
     }
 
     if ($env:ONLY_WHEN_CHARGING) {

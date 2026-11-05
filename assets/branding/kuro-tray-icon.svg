@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" data-state="idle" role="img" aria-label="Kuro">
+  <style>
+    .kuro-bar-pulse { transform-box: fill-box; transform-origin: center; }
+    svg[data-state="listening"] .kuro-bar-pulse { animation: kuroPulse 0.85s ease-in-out infinite; }
+    svg[data-state="speaking"] .kuro-bar-pulse { animation: kuroPulse 0.5s ease-in-out infinite; }
+    .kuro-bar-pulse:nth-child(odd) { animation-delay: 0.12s; }
+    @keyframes kuroPulse {
+      0%, 100% { transform: scaleY(0.45); }
+      50% { transform: scaleY(1); }
+    }
+  </style>
+  <rect width="64" height="64" fill="#F5F4EE"/>
+  <g id="kuro-architectural-frame" fill="none" stroke="#141414">
+    <rect x="3" y="3" width="58" height="58" stroke-width="4"/>
+    <rect x="10" y="10" width="44" height="44" stroke-width="2"/>
+    <rect x="1" y="1" width="14" height="14" fill="#141414" stroke="none"/>
+  </g>
+  <g id="kuro-mark-geometry" fill="#141414">
+    <rect class="kuro-bar-pulse" x="18" y="30" width="3" height="10"/>
+    <rect class="kuro-bar-pulse" x="23" y="24" width="3" height="22"/>
+    <rect class="kuro-bar-pulse" x="28" y="18" width="3" height="34"/>
+    <rect class="kuro-bar-pulse" x="33" y="14" width="3" height="36"/>
+    <rect class="kuro-bar-pulse" x="38" y="18" width="3" height="34"/>
+    <rect class="kuro-bar-pulse" x="43" y="24" width="3" height="22"/>
+    <rect class="kuro-bar-pulse" x="48" y="30" width="3" height="10"/>
+  </g>
+</svg>

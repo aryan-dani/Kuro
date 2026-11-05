@@ -28,7 +28,7 @@ PARAMETERS = {
     },
 }
 
-_TIMEOUT_SEC = 25
+_TIMEOUT_SEC = 8
 
 
 def run(arguments: dict[str, Any]) -> str:

@@ -33,9 +33,97 @@ _ERR = "#FFFFFF"
 _manager: "OverlayManager | None" = None
 
 
-def current() -> "OverlayManager | None":
+def current():
     """The running HUD, so other tools can share its window."""
     return _manager
+
+
+class HeadlessOverlay:
+    """State for the shell when the Tk card is not on screen."""
+
+    def __init__(self) -> None:
+        self._state = OverlayState.HIDDEN
+        self._levels: list[float] = [0.0] * 11
+        self._you = ""
+        self._kuro = ""
+        self._lock = threading.Lock()
+        self._hold_token = 0
+
+    def start(self) -> None:
+        global _manager
+        _manager = self
+
+    def stop(self) -> None:
+        return None
+
+    def set_state(
+        self,
+        state: OverlayState | str,
+        subtitle: str | None = None,
+        hold_ms: int | None = None,
+        listen_seconds: float | None = None,
+    ) -> None:
+        if isinstance(state, str):
+            state = OverlayState(state.lower())
+        shell = {
+            OverlayState.DONE: "result",
+            OverlayState.DORMANT: "hidden",
+            OverlayState.READY: "hidden",
+        }.get(state, state.value)
+        with self._lock:
+            self._hold_token += 1
+            token = self._hold_token
+            self._state = state
+            self._shell = shell
+            self._label = (subtitle or shell or "").strip()
+        if hold_ms and hold_ms > 0 and shell != "hidden":
+            def _expire(expected: int = token) -> None:
+                with self._lock:
+                    if self._hold_token != expected:
+                        return
+                self.set_state(OverlayState.HIDDEN)
+
+            threading.Timer(hold_ms / 1000.0, _expire).start()
+
+    def set_transcript(self, you: str | None = None, kuro: str | None = None) -> None:
+        with self._lock:
+            if you is not None:
+                self._you = you
+            if kuro is not None:
+                self._kuro = kuro
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            state = getattr(self, "_shell", "hidden")
+            levels = list(self._levels)
+            label = getattr(self, "_label", "")
+        return {"state": state, "label": label, "levels": [round(float(v), 3) for v in levels]}
+
+    def transcript_pair(self) -> tuple[str, str]:
+        with self._lock:
+            return self._you, self._kuro
+
+    def push_level(self, level: float) -> None:
+        level = max(0.0, min(1.0, float(level)))
+        with self._lock:
+            self._levels.append(level)
+            self._levels = self._levels[-11:]
+
+    def clear_levels(self) -> None:
+        with self._lock:
+            self._levels = [0.0] * 11
+
+    def set_open_mic(self, on: bool) -> None:
+        return None
+
+    def set_rec_seconds(self, seconds: float) -> None:
+        return None
+
+    def force_hide(self) -> None:
+        self.set_state(OverlayState.HIDDEN)
+
+    def flash(self, title: str, subtitle: str = "", hold_ms: int = 2200, accent: str | None = None) -> None:
+        self.set_state(OverlayState.SPEAKING, subtitle=subtitle or title, hold_ms=hold_ms)
 
 
 def voice_level(samples) -> float:

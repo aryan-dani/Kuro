@@ -11,8 +11,10 @@ Env overrides:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
 from typing import Literal
 
 import config
@@ -23,6 +25,11 @@ logger = logging.getLogger(__name__)
 Mode = Literal["ac_full", "battery_thin"]
 SttBackend = Literal["cuda", "npu", "cpu"]
 TtsEngine = Literal["xtts", "piper", "pyttsx3"]
+
+# Lenovo GetSmartFanMode on this Legion: 1 quiet, 2 balanced, 3 performance.
+_PERFORMANCE_MODE = 3
+_LEGION_FILE = os.path.join(os.environ.get("LOCALAPPDATA", "."), "Kuro", "legion_mode.json")
+_LEGION_MAX_AGE_SEC = 45.0
 
 
 def get_power() -> dict:
@@ -68,14 +75,59 @@ def allow_cuda() -> bool:
     return stt == "cuda" or tts == "xtts"
 
 
+def legion_status() -> dict | None:
+    """Elevated writer drops this file. Missing or stale means stay light."""
+    try:
+        with open(_LEGION_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    updated = data.get("updated")
+    try:
+        age = time.time() - float(updated)
+    except (TypeError, ValueError):
+        return None
+    if age < 0 or age > _LEGION_MAX_AGE_SEC:
+        return None
+    return data
+
+
+def ready_for_heavy() -> bool:
+    """CUDA Whisper + XTTS preload only on the real charger in Performance mode.
+
+    Live AC must be online. smart_fan_mode 3 is Performance.
+    ac_fit 0 means Lenovo says the adapter is too weak. -1 means the read failed.
+    """
+    if not on_ac():
+        return False
+    status = legion_status()
+    if not status:
+        return False
+    if not status.get("ac_online"):
+        return False
+    try:
+        fan = int(status.get("smart_fan_mode"))
+    except (TypeError, ValueError):
+        return False
+    if fan != _PERFORMANCE_MODE:
+        return False
+    try:
+        fit = int(status.get("ac_fit"))
+    except (TypeError, ValueError):
+        fit = -1
+    if fit == 0:
+        return False
+    return True
+
+
 def should_preload_xtts() -> bool:
-    """Warm XTTS at boot only on AC when engine wants natural voice."""
+    """Background XTTS load only when the heavy gate is open and voice is wanted."""
     raw = (getattr(config, "KURO_TTS_ENGINE", None) or os.getenv("KURO_TTS_ENGINE", "auto")).strip().lower()
-    if raw == "xtts":
-        return True
     if raw in ("piper", "pyttsx3"):
         return False
-    return on_ac()
+    return ready_for_heavy()
 
 
 def _piper_available() -> bool:
@@ -113,6 +165,8 @@ def device_report() -> dict:
         "stt": prefer_stt(),
         "tts": prefer_tts(),
         "allow_cuda": allow_cuda(),
+        "ready_for_heavy": ready_for_heavy(),
+        "legion": legion_status(),
         "preload_xtts": should_preload_xtts(),
         "cuda": False,
     }

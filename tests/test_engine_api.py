@@ -110,6 +110,42 @@ def test_say_uses_the_phrase_router(monkeypatch, token_file):
     assert calls["text"] == "pause the song"
 
 
+def test_thread_clear_forgets_the_model_conversation(monkeypatch, token_file):
+    import brain
+
+    class _Brain:
+        def __init__(self):
+            self.cleared = False
+
+        def clear(self):
+            self.cleared = True
+
+    stub = _Brain()
+    monkeypatch.setattr(brain, "_brain", stub)
+    from fastapi.testclient import TestClient
+
+    client = TestClient(engine_api.build_app())
+    denied = client.post("/thread/clear", json={})
+    assert denied.status_code == 401
+    assert stub.cleared is False
+    ok = client.post("/thread/clear", headers={"X-Kuro-Token": "test-token-value"}, json={})
+    assert ok.status_code == 200
+    assert stub.cleared is True
+
+
+def test_dismiss_hides_without_using_escape(token_file):
+    called = {}
+    engine_api.on_dismiss(lambda: called.setdefault("yes", True))
+    from fastapi.testclient import TestClient
+
+    client = TestClient(engine_api.build_app())
+    denied = client.post("/dismiss", json={})
+    assert denied.status_code == 401
+    ok = client.post("/dismiss", headers={"X-Kuro-Token": "test-token-value"}, json={})
+    assert ok.status_code == 200
+    assert called.get("yes") is True
+
+
 def test_event_frame_hides_text_unless_asked(monkeypatch):
     class _Hud:
         def snapshot(self):

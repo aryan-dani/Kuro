@@ -6,6 +6,7 @@ internal static class WindowChrome
 {
     private const int GwlExstyle = -20;
     private const int WsExToolwindow = 0x00000080;
+    private const int WsExTopmost = 0x00000008;
     private const int WsExNoactivate = 0x08000000;
     private const int WsExTransparent = 0x00000020;
     private static readonly IntPtr HwndTopmost = new(-1);
@@ -22,7 +23,74 @@ internal static class WindowChrome
         SetWindowLongPtr(hwnd, GwlExstyle, new IntPtr(style));
     }
 
-    public static (int X, int Y, int Width, int Height) Place(int width, int height)
+    public static void MakeOverlay(IntPtr hwnd)
+    {
+        var style = GetWindowLongPtr(hwnd, GwlExstyle).ToInt64();
+        style |= WsExToolwindow | WsExNoactivate;
+        style &= ~WsExTransparent;
+        style &= ~0x00200000;
+        SetWindowLongPtr(hwnd, GwlExstyle, new IntPtr(style));
+        SetWindowRgn(hwnd, IntPtr.Zero, true);
+    }
+
+    public static double DpiScale(IntPtr hwnd)
+    {
+        var dpi = GetDpiForWindow(hwnd);
+        if (dpi < 96)
+        {
+            return 1;
+        }
+
+        return dpi / 96.0;
+    }
+
+    public static void ClipToCluster(
+        IntPtr hwnd,
+        int windowWidth,
+        int circle,
+        int gap,
+        int capsuleWidth,
+        int dockY,
+        int dockWidth,
+        int dockHeight,
+        int dockRadius)
+    {
+        if (circle < 8 || capsuleWidth < 8)
+        {
+            return;
+        }
+
+        var row = circle + gap + capsuleWidth;
+        var origin = Math.Max(0, (windowWidth - row) / 2);
+        var cluster = CreateEllipticRgn(origin, 0, origin + circle + 1, circle + 1);
+        var capsuleLeft = origin + circle + gap;
+        var capsule = CreateRoundRectRgn(
+            capsuleLeft,
+            0,
+            capsuleLeft + capsuleWidth + 1,
+            circle + 1,
+            circle,
+            circle);
+        CombineRgn(cluster, cluster, capsule, 2);
+        DeleteObject(capsule);
+        if (dockHeight > 2 && dockWidth > 2)
+        {
+            var dockLeft = Math.Max(0, (windowWidth - dockWidth) / 2);
+            var dock = CreateRoundRectRgn(
+                dockLeft,
+                dockY,
+                dockLeft + dockWidth + 1,
+                dockY + dockHeight + 1,
+                dockRadius,
+                dockRadius);
+            CombineRgn(cluster, cluster, dock, 2);
+            DeleteObject(dock);
+        }
+
+        SetWindowRgn(hwnd, cluster, true);
+    }
+
+    public static (int X, int Y, int Width, int Height) Place(int width, int height, int gapPixels)
     {
         GetCursorPos(out var cursor);
         var monitor = MonitorFromPoint(cursor, MonitorDefaultToNearest);
@@ -34,13 +102,28 @@ internal static class WindowChrome
 
         var work = info.Work;
         var x = work.Left + Math.Max(0, (work.Right - work.Left - width) / 2);
-        var y = work.Bottom - height - (int)DesignTokens.WorkAreaGap;
+        var y = work.Bottom - height - gapPixels;
         return (x, y, width, height);
+    }
+
+    public static (int X, int Y) WorkCenter()
+    {
+        GetCursorPos(out var cursor);
+        var monitor = MonitorFromPoint(cursor, MonitorDefaultToNearest);
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        if (!GetMonitorInfo(monitor, ref info))
+        {
+            return (640, 360);
+        }
+
+        var work = info.Work;
+        return ((work.Left + work.Right) / 2, (work.Top + work.Bottom) / 2);
     }
 
     public static void ShowTopmost(IntPtr hwnd, int x, int y, int width, int height)
     {
-        SetWindowPos(hwnd, HwndTopmost, x, y, width, height, SwpNoactivate | SwpShowwindow);
+        SetWindowPos(hwnd, IntPtr.Zero, x, y, width, height, SwpNoactivate | SwpShowwindow);
+        BringWindowToTop(hwnd);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -69,6 +152,24 @@ internal static class WindowChrome
     }
 
     [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int widthEllipse, int heightEllipse);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll")]
+    private static extern int CombineRgn(IntPtr dest, IntPtr src1, IntPtr src2, int mode);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr obj);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+
+    [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point point);
 
     [DllImport("user32.dll")]
@@ -85,4 +186,7 @@ internal static class WindowChrome
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool BringWindowToTop(IntPtr hwnd);
 }

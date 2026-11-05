@@ -25,7 +25,7 @@ import hub_client
 import media_hold
 import phrases
 import timing
-from overlay import OverlayManager, OverlayState, voice_level
+from overlay import HeadlessOverlay, OverlayManager, OverlayState, voice_level
 from tray import KuroState, TrayManager
 
 SAMPLE_RATE = 16000
@@ -35,33 +35,104 @@ TRAY_RECORD_SECONDS = 4
 MIN_PTT_SECONDS = 0.35
 MAX_PTT_SECONDS = 30.0
 _MIC_DEVICE: int | None = None
+_MIC_RATE = SAMPLE_RATE
+_MIC_CHANNELS = CHANNELS
 
 
-def _pick_mic_device() -> int | None:
-    """Prefer onboard Realtek mic array over Bluetooth headsets."""
+def _host_name(device: dict) -> str:
     try:
-        devices = sd.query_devices()
-        default_in = sd.default.device[0] if isinstance(sd.default.device, (list, tuple)) else sd.default.device
-        preferred = []
-        for i, d in enumerate(devices):
-            if d.get("max_input_channels", 0) <= 0:
-                continue
-            name = (d.get("name") or "").lower()
-            if "realtek" in name and "mic" in name:
-                preferred.append((0, i, d["name"]))
-            elif "microphone array" in name:
-                preferred.append((1, i, d["name"]))
-            elif "microphone" in name and "headset" not in name and "hands-free" not in name:
-                preferred.append((2, i, d["name"]))
-        if preferred:
-            preferred.sort()
-            idx = preferred[0][1]
-            logger.info("Mic device: [%s] %s (default was %s)", idx, preferred[0][2], default_in)
-            return idx
-        logger.info("Mic device: system default (%s)", default_in)
+        return str(sd.query_hostapis(int(device["hostapi"]))["name"]).lower()
     except Exception:
-        logger.exception("Mic device probe failed")
-    return None
+        return ""
+
+
+def _mic_candidates() -> list[tuple[int, str]]:
+    """WASAPI shared first, then the MME Realtek array. Skip headsets and WDM-KS."""
+    devices = sd.query_devices()
+    ranked: list[tuple[int, int, str]] = []
+    for i, d in enumerate(devices):
+        if d.get("max_input_channels", 0) <= 0:
+            continue
+        name = d.get("name") or ""
+        low = name.lower()
+        if "headset" in low or "hands-free" in low or "bthhfenum" in low:
+            continue
+        host = _host_name(d)
+        if "wdm" in host:
+            continue
+        if "mme" in host and "realtek" in low and "mic" in low:
+            rank = 0
+        elif "wasapi" in host and "microphone" in low:
+            rank = 1
+        elif "directsound" in host and "microphone" in low:
+            rank = 2
+        elif "microphone" in low:
+            rank = 3
+        else:
+            continue
+        ranked.append((rank, i, name))
+    ranked.sort()
+    ordered = [(i, name) for _, i, name in ranked]
+    if _MIC_DEVICE is not None:
+        ordered.sort(key=lambda item: 0 if item[0] == _MIC_DEVICE else 1)
+    return ordered
+
+
+def _open_ptt_stream():
+    """Open the mic at its native rate. WASAPI stays in shared mode."""
+    global _MIC_DEVICE, _MIC_RATE, _MIC_CHANNELS
+    last_error: Exception | None = None
+    for idx, name in _mic_candidates():
+        info = sd.query_devices(idx)
+        rate = int(info.get("default_samplerate") or SAMPLE_RATE)
+        channels = 2 if int(info.get("max_input_channels") or 1) >= 2 else 1
+        kwargs = dict(
+            samplerate=rate,
+            channels=channels,
+            dtype="int16",
+            callback=_ptt_callback,
+            blocksize=1024,
+            device=idx,
+        )
+        if "wasapi" in _host_name(info):
+            kwargs["extra_settings"] = sd.WasapiSettings(exclusive=False)
+        stream = None
+        try:
+            stream = sd.InputStream(**kwargs)
+            stream.start()
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Mic [%s] %s did not open (%s)", idx, name, exc)
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+            continue
+        _MIC_DEVICE = idx
+        _MIC_RATE = rate
+        _MIC_CHANNELS = channels
+        logger.info("Mic open: [%s] %s at %s Hz, %s ch", idx, name, rate, channels)
+        return stream
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("no microphone")
+
+
+def _as_16k_mono(audio: np.ndarray) -> np.ndarray:
+    """Downmix and resample a native-rate capture to 16 kHz mono."""
+    if audio.size == 0:
+        return np.zeros(0, dtype=np.int16)
+    if audio.ndim == 2:
+        audio = audio.mean(axis=1)
+    samples = np.asarray(audio, dtype=np.float32).reshape(-1)
+    rate = _MIC_RATE or SAMPLE_RATE
+    if rate != SAMPLE_RATE and samples.size > 1:
+        target = max(1, int(round(samples.size * SAMPLE_RATE / float(rate))))
+        source_x = np.linspace(0.0, 1.0, num=samples.size, endpoint=False)
+        target_x = np.linspace(0.0, 1.0, num=target, endpoint=False)
+        samples = np.interp(target_x, source_x, samples).astype(np.float32)
+    return np.clip(np.rint(samples), -32768, 32767).astype(np.int16)
 
 
 is_processing = False
@@ -231,12 +302,10 @@ def _partial_transcribe_loop() -> None:
                 continue
             frames = list(_ptt_frames)
         try:
-            audio = np.concatenate(frames, axis=0)
+            audio = _as_16k_mono(np.concatenate(frames, axis=0))
             if audio.shape[0] < int(SAMPLE_RATE * 0.8):
                 continue
             path = os.path.join(tempfile.gettempdir(), "kuro_partial.wav")
-            if audio.ndim == 1:
-                audio = audio.reshape(-1, 1)
             sf.write(path, audio, SAMPLE_RATE)
             text = _transcribe(path, partial=True)
             if text and text.strip() and text.strip() != last_text:
@@ -330,20 +399,7 @@ def start_push_to_talk() -> None:
 
     with _ptt_lock:
         try:
-            global _MIC_DEVICE
-            if _MIC_DEVICE is None:
-                _MIC_DEVICE = _pick_mic_device()
-            stream_kwargs = dict(
-                samplerate=SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype="int16",
-                callback=_ptt_callback,
-                blocksize=1024,
-            )
-            if _MIC_DEVICE is not None:
-                stream_kwargs["device"] = _MIC_DEVICE
-            _ptt_stream = sd.InputStream(**stream_kwargs)
-            _ptt_stream.start()
+            _ptt_stream = _open_ptt_stream()
             timing.mark("recording_start")
         except Exception:
             _ptt_active = False
@@ -352,7 +408,12 @@ def start_push_to_talk() -> None:
             timing.finish()
             media_hold.release()
             if overlay_manager:
-                overlay_manager.set_state(OverlayState.ERROR, subtitle="Mic failed to open", hold_ms=3000)
+                overlay_manager.set_state(OverlayState.ERROR, subtitle="Mic failed to open", hold_ms=1600)
+            threading.Thread(
+                target=lambda: _speak("I could not open the microphone.", fast=True),
+                daemon=True,
+                name="KuroMicFail",
+            ).start()
             return
 
     _ptt_partial_stop.clear()
@@ -392,13 +453,21 @@ def stop_push_to_talk() -> None:
 
     timing.mark("hotkey_up")
     elapsed = time.time() - started
-    peak = 0
+    audio = np.zeros(0, dtype=np.int16)
     if frames:
         try:
-            peak = int(np.max(np.abs(np.concatenate(frames, axis=0))))
+            audio = _as_16k_mono(np.concatenate(frames, axis=0))
         except Exception:
-            peak = 0
-    logger.info("PTT released after %.2fs (%d chunks, peak=%s)", elapsed, len(frames), peak)
+            logger.exception("Mic convert failed")
+            audio = np.zeros(0, dtype=np.int16)
+    peak = int(np.max(np.abs(audio))) if audio.size else 0
+    logger.info(
+        "PTT released after %.2fs (%d chunks, peak=%s, rate=%s)",
+        elapsed,
+        len(frames),
+        peak,
+        _MIC_RATE,
+    )
 
     if peak < 80:
         logger.warning("Mic peak very low (%s) — check Windows mic privacy / input device", peak)
@@ -446,7 +515,6 @@ def stop_push_to_talk() -> None:
         media_hold.release()
         return
 
-    audio = np.concatenate(frames, axis=0)
     max_samples = int(MAX_PTT_SECONDS * SAMPLE_RATE)
     if audio.shape[0] > max_samples:
         audio = audio[:max_samples]
@@ -878,8 +946,15 @@ def main() -> None:
         config.KURO_LLM_MODE,
     )
 
-    overlay_manager = OverlayManager()
-    overlay_manager.start()
+    import engine_api
+
+    if engine_api.api_requested():
+        logger.info("Shell owns the HUD. Python card stays hidden.")
+        overlay_manager = HeadlessOverlay()
+        overlay_manager.start()
+    else:
+        overlay_manager = OverlayManager()
+        overlay_manager.start()
 
     _set_process_priority(below_normal=True)
 
@@ -999,9 +1074,12 @@ def main() -> None:
 
     threading.Thread(target=_wa_warmup, daemon=True, name="KuroWaLink").start()
 
-    tray_manager = TrayManager(on_trigger=on_tray_trigger, on_quit=on_quit)
-    tray_manager.start()
-    print("[Kuro] Tray + overlay ready.")
+    if engine_api.api_requested():
+        print("[Kuro] Shell mode. Hotkey stays here.")
+    else:
+        tray_manager = TrayManager(on_trigger=on_tray_trigger, on_quit=on_quit)
+        tray_manager.start()
+        print("[Kuro] Tray + overlay ready.")
     print(f"[Kuro] HOLD {config.KURO_HOTKEY}, speak, then RELEASE.")
 
     if hub_client.configured():
@@ -1016,10 +1094,15 @@ def main() -> None:
         print("[Kuro] Hub: not configured (set KURO_HUB_TOKEN in .env)")
 
     timing.once("startup", "ready_for_hotkey", timing.since(_BOOT_TICK))
-    import engine_api
-
     if engine_api.api_requested():
         engine_api.on_shutdown(on_quit)
+
+        def _dismiss_from_shell() -> None:
+            _force_unblock("dismiss")
+            if overlay_manager:
+                overlay_manager.force_hide()
+
+        engine_api.on_dismiss(_dismiss_from_shell)
         engine_api.ensure_token()
         engine_api.start_background()
     try:

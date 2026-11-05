@@ -1,19 +1,13 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Installs a Windows Scheduled Task that starts the Kuro home-Wi‑Fi watcher at logon.
+  Installs logon tasks that keep one light Kuro running.
 
 .DESCRIPTION
-  Creates/updates task "KuroAutostart":
-  - Trigger: at logon for the current user
-  - Runs Watch-KuroWifi.ps1 (starts Kuro only on home Wi‑Fi; stops it when away)
-  - Allowed on battery (watcher is cheap; GPU work still gated inside Kuro)
+  KuroAutostart (limited): Watch-Kuro.ps1, 90 seconds after logon.
+  KuroLegionMode (highest): Write-KuroLegionMode.ps1 so Kuro can see Performance mode.
 
   Self-elevates via UAC when not already running as Administrator.
-
-.PARAMETER HomeSsid
-  Home Wi‑Fi name(s). Written to %LOCALAPPDATA%\Kuro\home_ssid.txt.
-  If omitted, the current SSID is captured when detectable.
 #>
 [CmdletBinding()]
 param(
@@ -24,8 +18,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $TaskName = "KuroAutostart"
-$WatchScript = Join-Path $PSScriptRoot "Watch-KuroWifi.ps1"
-$StartScript = Join-Path $PSScriptRoot "Start-Kuro.ps1"
+$ModeTask = "KuroLegionMode"
+$WatchScript = Join-Path $PSScriptRoot "Watch-Kuro.ps1"
+$ModeScript = Join-Path $PSScriptRoot "Write-KuroLegionMode.ps1"
 $LogDir = Join-Path $env:LOCALAPPDATA "Kuro"
 $SsidFile = Join-Path $LogDir "home_ssid.txt"
 
@@ -68,6 +63,7 @@ function Get-CurrentSsid {
 
 function Save-HomeSsid {
     param([string[]]$Names)
+    if (-not $Names -or $Names.Count -eq 0) { return }
     if (-not (Test-Path -LiteralPath $LogDir)) {
         New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
     }
@@ -76,16 +72,13 @@ function Save-HomeSsid {
         $detected = Get-CurrentSsid
         if ($detected) { $clean = @($detected) }
     }
-    if ($clean.Count -eq 0) {
-        Write-Warning ("No home SSID set. Create {0} (one name per line) before the watcher can start Kuro." -f $SsidFile)
-        return
-    }
-    Set-Content -LiteralPath $SsidFile -Value $clean -Encoding UTF8
+    if ($clean.Count -eq 0) { return }
+    Set-Content -LiteralPath $SsidFile -Value $clean -Encoding ASCII
     Write-Host ("Home Wi-Fi saved to {0}: {1}" -f $SsidFile, ($clean -join ", "))
 }
 
 function Uninstall-KuroTask {
-    foreach ($name in @($TaskName, "KuroWifiWatcher")) {
+    foreach ($name in @($TaskName, $ModeTask, "KuroWifiWatcher")) {
         $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
         if ($existing) {
             Unregister-ScheduledTask -TaskName $name -Confirm:$false
@@ -94,78 +87,105 @@ function Uninstall-KuroTask {
     }
 }
 
+function Set-TriggerDelay {
+    param($Trigger, [int]$Seconds)
+    # Logon trigger Delay is an ISO-8601 duration string. A TimeSpan serializes
+    # as 00:01:30 and Task Scheduler rejects that XML.
+    $Trigger.Delay = "PT{0}S" -f $Seconds
+}
+
 function Install-KuroTask {
     if (-not (Test-Path -LiteralPath $WatchScript)) {
-        throw ("Watch script missing: {0}" -f $WatchScript)
+        throw ("Supervisor script missing: {0}" -f $WatchScript)
+    }
+    if (-not (Test-Path -LiteralPath $ModeScript)) {
+        throw ("Legion mode script missing: {0}" -f $ModeScript)
     }
 
     $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     $psExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-    $actionArgs = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $WatchScript
 
-    $action = New-ScheduledTaskAction -Execute $psExe -Argument $actionArgs
-    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
     $settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `
         -DontStopIfGoingOnBatteries `
         -StartWhenAvailable `
         -MultipleInstances IgnoreNew `
         -ExecutionTimeLimit ([TimeSpan]::Zero)
-    $principal = New-ScheduledTaskPrincipal `
-        -UserId $userId `
-        -LogonType Interactive `
-        -RunLevel Limited
 
+    $watchArgs = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $WatchScript
+    $watchTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
+    Set-TriggerDelay -Trigger $watchTrigger -Seconds 90
+    $watchPrincipal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask `
         -TaskName $TaskName `
-        -Action $action `
-        -Trigger $trigger `
+        -Action (New-ScheduledTaskAction -Execute $psExe -Argument $watchArgs) `
+        -Trigger $watchTrigger `
         -Settings $settings `
-        -Principal $principal `
-        -Description "Starts Kuro Wi-Fi watcher at logon. Kuro runs only on home Wi-Fi; stops away to save battery." `
+        -Principal $watchPrincipal `
+        -Description "Starts the Kuro supervisor 90 seconds after logon. One light instance; GPU warm only in Legion Performance on the real charger." `
         -Force | Out-Null
 
-    # Remove legacy duplicate task name if present
+    $modeArgs = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $ModeScript
+    $modeTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
+    Set-TriggerDelay -Trigger $modeTrigger -Seconds 30
+    $modePrincipal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Highest
+    Register-ScheduledTask `
+        -TaskName $ModeTask `
+        -Action (New-ScheduledTaskAction -Execute $psExe -Argument $modeArgs) `
+        -Trigger $modeTrigger `
+        -Settings $settings `
+        -Principal $modePrincipal `
+        -Description "Writes Legion Performance mode for Kuro. Highest so root\WMI is readable." `
+        -Force | Out-Null
+
     $legacy = Get-ScheduledTask -TaskName "KuroWifiWatcher" -ErrorAction SilentlyContinue
     if ($legacy) {
         Unregister-ScheduledTask -TaskName "KuroWifiWatcher" -Confirm:$false
     }
 
-    $task = Get-ScheduledTask -TaskName $TaskName
-    Write-Host ("Installed scheduled task: {0}" -f $TaskName)
-    Write-Host ("  User:    {0}" -f $userId)
-    Write-Host ("  State:   {0}" -f $task.State)
-    Write-Host ("  Action:  {0} {1}" -f $psExe, $actionArgs)
-    Write-Host "  Trigger: At logon (Wi-Fi watcher)"
+    Write-Host ("Installed {0} (delay 90s) and {1} (delay 30s, highest)" -f $TaskName, $ModeTask)
+    Write-Host ("  User: {0}" -f $userId)
 }
 
 Request-Elevation
 
-if ($Uninstall) {
-    Uninstall-KuroTask
-    exit 0
+$InstallLog = Join-Path $LogDir "install.log"
+if (-not (Test-Path -LiteralPath $LogDir)) {
+    New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 }
 
-Save-HomeSsid -Names $HomeSsid
-Install-KuroTask
+try {
+    if ($Uninstall) {
+        Uninstall-KuroTask
+        exit 0
+    }
 
-if ($StartNow) {
-    Write-Host "Starting Wi-Fi watcher now..."
-    try {
+    Save-HomeSsid -Names $HomeSsid
+    Install-KuroTask
+
+    if ($StartNow) {
+        Write-Host "Starting Legion mode writer and Kuro supervisor now..."
+        Start-Process -FilePath "powershell.exe" -ArgumentList @(
+            "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+            "-File", $ModeScript
+        ) -WindowStyle Hidden | Out-Null
         Start-Process -FilePath "powershell.exe" -ArgumentList @(
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
             "-File", $WatchScript
         ) -WindowStyle Hidden | Out-Null
     }
-    catch {
-        Write-Warning ("Could not start watcher immediately: {0}. Task is still installed." -f $_.Exception.Message)
-    }
-}
 
-Write-Host ""
-Write-Host "Done. At logon the Wi-Fi watcher starts; Kuro runs only on home Wi-Fi."
-Write-Host ("SSID file: {0}" -f $SsidFile)
-Write-Host ("Watcher log: {0}" -f (Join-Path $LogDir "wifi-watch.log"))
-Write-Host ("Autostart log: {0}" -f (Join-Path $LogDir "autostart.log"))
-Write-Host "Docs: docs/WIFI_WATCH.md"
-exit 0
+    "OK $(Get-Date -Format o)" | Set-Content -LiteralPath $InstallLog -Encoding ASCII
+    Write-Host ""
+    Write-Host "Done. Logon starts one light Kuro. GPU models load only in Legion Performance on the real charger."
+    Write-Host ("Supervisor log: {0}" -f (Join-Path $LogDir "supervisor.log"))
+    Write-Host ("Mode file:      {0}" -f (Join-Path $LogDir "legion_mode.json"))
+    Write-Host ("Autostart log:  {0}" -f (Join-Path $LogDir "autostart.log"))
+    exit 0
+}
+catch {
+    $msg = $_.Exception.ToString()
+    try { Set-Content -LiteralPath $InstallLog -Value $msg -Encoding ASCII } catch { }
+    Write-Error $msg
+    exit 1
+}

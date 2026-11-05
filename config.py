@@ -37,9 +37,13 @@ TUYA_LOCAL_KEY = os.getenv("TUYA_LOCAL_KEY", "")
 TUYA_IP = os.getenv("TUYA_IP", "")
 TUYA_VERSION = os.getenv("TUYA_VERSION", "3.3")
 
-# Cloud inbox (n8n) — optional; desk boot does not require these
+# Cloud inbox (n8n Cloud) — optional; desk boot does not require these
 N8N_INBOX_WEBHOOK_URL = os.getenv("N8N_INBOX_WEBHOOK_URL", "")
 N8N_WEBHOOK_SECRET = os.getenv("N8N_WEBHOOK_SECRET", "")
+
+# Self-hosted n8n on kuro-server (Tailscale). Empty token disables voice workflows.
+KURO_N8N_BASE_URL = os.getenv("KURO_N8N_BASE_URL", "http://100.78.60.50:5678/webhook").rstrip("/")
+KURO_N8N_TOKEN = os.getenv("KURO_N8N_TOKEN", "")
 
 # Kuro hub (Tailscale). Fill KURO_HUB_TOKEN to match /srv/kuro/.env on the server.
 KURO_HUB_URL = os.getenv("KURO_HUB_URL", "http://100.78.60.50:18200").rstrip("/")

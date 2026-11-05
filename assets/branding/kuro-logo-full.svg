@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 620" data-state="idle" role="img" aria-labelledby="kuroTitle kuroDesc">
+  <title id="kuroTitle">KURO, desk voice agent</title>
+  <desc id="kuroDesc">Architectural pulse mark with the KURO wordmark.</desc>
+  <style>
+    .kuro-bar-pulse, .kuro-arm-bar { transform-box: fill-box; transform-origin: center; }
+    svg[data-state="listening"] .kuro-bar-pulse { animation: kuroPulse 0.85s ease-in-out infinite; }
+    svg[data-state="listening"] .kuro-arm-bar { animation: kuroSpeak 1.15s ease-in-out infinite; }
+    svg[data-state="speaking"] .kuro-bar-pulse { animation: kuroPulse 0.55s ease-in-out infinite; }
+    svg[data-state="speaking"] .kuro-arm-bar { animation: kuroSpeak 0.7s ease-in-out infinite; }
+    .kuro-bar-pulse:nth-child(1) { animation-delay: 0s; }
+    .kuro-bar-pulse:nth-child(2) { animation-delay: 0.08s; }
+    .kuro-bar-pulse:nth-child(3) { animation-delay: 0.16s; }
+    .kuro-bar-pulse:nth-child(4) { animation-delay: 0.24s; }
+    .kuro-bar-pulse:nth-child(5) { animation-delay: 0.16s; }
+    .kuro-bar-pulse:nth-child(6) { animation-delay: 0.08s; }
+    @keyframes kuroPulse {
+      0%, 100% { transform: scaleY(0.4); }
+      50% { transform: scaleY(1); }
+    }
+    @keyframes kuroSpeak {
+      0%, 100% { transform: scaleY(0.72); }
+      50% { transform: scaleY(1); }
+    }
+  </style>
+  <rect width="520" height="620" fill="#F5F4EE"/>
+  <defs>
+    <pattern id="kuro-hatch" width="7" height="7" patternUnits="userSpaceOnUse">
+      <path d="M-1 8 L8 -1" stroke="#141414" stroke-width="1.4"/>
+    </pattern>
+  </defs>
+  <g id="kuro-architectural-frame" fill="none" stroke="#141414">
+    <rect x="164" y="64" width="246" height="246" fill="url(#kuro-hatch)" stroke="none"/>
+    <rect x="148" y="48" width="240" height="240" fill="#F5F4EE" stroke-width="8"/>
+    <rect x="166" y="66" width="204" height="204" stroke-width="4"/>
+    <rect x="136" y="36" width="36" height="36" fill="#141414" stroke="none"/>
+  </g>
+  <g id="kuro-mark-geometry" fill="#141414">
+    <rect x="186" y="96" width="18" height="148"/>
+    <g class="kuro-arms">
+      <rect class="kuro-arm-bar" x="214" y="150" width="10" height="22"/>
+      <rect class="kuro-arm-bar" x="230" y="138" width="10" height="22"/>
+      <rect class="kuro-arm-bar" x="246" y="126" width="10" height="22"/>
+      <rect class="kuro-arm-bar" x="262" y="114" width="10" height="22"/>
+      <rect class="kuro-arm-bar" x="278" y="102" width="10" height="22"/>
+      <rect class="kuro-arm-bar" x="214" y="176" width="10" height="18"/>
+      <rect class="kuro-arm-bar" x="230" y="176" width="10" height="30"/>
+      <rect class="kuro-arm-bar" x="246" y="176" width="10" height="42"/>
+      <rect class="kuro-arm-bar" x="262" y="176" width="10" height="54"/>
+      <rect class="kuro-arm-bar" x="278" y="176" width="10" height="62"/>
+    </g>
+    <g id="kuro-notch">
+      <rect class="kuro-bar-pulse" x="312" y="158" width="6" height="10"/>
+      <rect class="kuro-bar-pulse" x="322" y="150" width="6" height="26"/>
+      <rect class="kuro-bar-pulse" x="332" y="140" width="6" height="46"/>
+      <rect class="kuro-bar-pulse" x="342" y="140" width="6" height="46"/>
+      <rect class="kuro-bar-pulse" x="352" y="150" width="6" height="26"/>
+      <rect class="kuro-bar-pulse" x="362" y="158" width="6" height="10"/>
+    </g>
+  </g>
+  <g id="kuro-wordmark" fill="#141414">
+    <rect x="148" y="360" width="16" height="72"/>
+    <polygon points="164,396 214,360 232,360 178,400 234,432 214,432 164,404"/>
+    <rect x="248" y="360" width="16" height="72"/>
+    <rect x="248" y="416" width="52" height="16"/>
+    <rect x="284" y="360" width="16" height="72"/>
+    <rect x="316" y="360" width="16" height="72"/>
+    <polygon points="332,360 378,360 392,374 392,404 376,418 348,418 364,432 346,432 328,416 328,392 348,392 348,376 332,376"/>
+    <rect x="408" y="368" width="44" height="56" fill="none" stroke="#141414" stroke-width="16"/>
+    <rect x="468" y="368" width="8" height="22"/>
+    <rect x="468" y="402" width="8" height="22"/>
+  </g>
+  <text x="148" y="470" fill="#52514E" font-family="JetBrains Mono, Consolas, monospace" font-size="16" letter-spacing="3.5">DESK VOICE AGENT</text>
+</svg>

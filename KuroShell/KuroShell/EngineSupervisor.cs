@@ -42,10 +42,10 @@ public sealed class EngineSupervisor
         if (!File.Exists(path))
         {
             var bytes = RandomNumberGenerator.GetBytes(32);
-            File.WriteAllText(path, Convert.ToHexString(bytes).ToLowerInvariant(), Encoding.UTF8);
+            File.WriteAllText(path, Convert.ToHexString(bytes).ToLowerInvariant(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
 
-        return File.ReadAllText(path, Encoding.UTF8).Trim();
+        return File.ReadAllText(path, Encoding.UTF8).Trim().TrimStart('\uFEFF');
     }
 
     public void StartOrAttach()
@@ -137,6 +137,7 @@ public sealed class EngineSupervisor
             UseShellExecute = false,
         };
         info.Environment["KURO_API"] = "on";
+        info.Environment["KURO_HUD_SHOW_TEXT"] = "1";
         try
         {
             _process = Process.Start(info);

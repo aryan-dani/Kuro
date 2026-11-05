@@ -1,0 +1,18 @@
+{
+  "workflows": {
+    "hello_kuro": {
+      "webhook": "hello-kuro",
+      "description": "Replies with a short hello from n8n",
+      "aliases": ["hello workflow", "n8n hello"],
+      "mode": "sync",
+      "takes_input": false
+    },
+    "log_idea": {
+      "webhook": "log-idea",
+      "description": "Saves an idea to notes",
+      "aliases": ["log idea", "save idea", "note this"],
+      "mode": "async",
+      "takes_input": true
+    }
+  }
+}

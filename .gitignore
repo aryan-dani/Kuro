@@ -74,5 +74,6 @@ Thumbs.db
 *.wav
 *.mp3
 *.png
+!assets/branding/*.png
 *.jpg
 temp/

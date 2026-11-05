@@ -21,6 +21,7 @@ _paused = False
 _pause_lock = threading.Lock()
 _server = None
 _shutdown_handler = None
+_dismiss_handler = None
 
 
 def api_requested() -> bool:
@@ -53,14 +54,15 @@ def ensure_token() -> Path:
 def load_token() -> str:
     path = token_path()
     try:
-        return path.read_text(encoding="utf-8").strip()
+        return path.read_text(encoding="utf-8-sig").strip()
     except OSError:
         return ""
 
 
 def token_matches(presented: str) -> bool:
     expected = load_token()
-    if not expected or not presented:
+    presented = (presented or "").strip().lstrip("\ufeff")
+    if not expected or not presented or len(presented) != len(expected):
         return False
     return hmac.compare_digest(presented, expected)
 
@@ -73,6 +75,11 @@ def is_paused() -> bool:
 def on_shutdown(handler) -> None:
     global _shutdown_handler
     _shutdown_handler = handler
+
+
+def on_dismiss(handler) -> None:
+    global _dismiss_handler
+    _dismiss_handler = handler
 
 
 def set_paused(value: bool) -> None:
@@ -254,6 +261,7 @@ def event_frame(*, include_text: bool) -> dict[str, Any]:
         logger.warning("HUD event frame unavailable")
     frame: dict[str, Any] = {
         "state": snap.get("state", "hidden"),
+        "label": snap.get("label") or snap.get("state", "hidden"),
         "levels": snap.get("levels", [0.0] * 11),
         "paused": is_paused(),
     }
@@ -314,10 +322,6 @@ def build_app():
         presented = request.headers.get("x-kuro-token", "")
         if not token_matches(presented):
             raise HTTPException(status_code=401, detail="unauthorized")
-
-    @app.middleware("http")
-    async def _quiet(request: Request, call_next):
-        return await call_next(request)
 
     @app.get("/status")
     def status(request: Request):
@@ -438,6 +442,22 @@ def build_app():
             return JSONResponse({"ok": False}, status_code=400)
         return say_text(text.strip())
 
+    @app.post("/thread/clear")
+    def clear_thread(request: Request):
+        _require(request)
+        import brain
+
+        brain.clear_thread()
+        return {"ok": True}
+
+    @app.post("/dismiss")
+    def dismiss(request: Request):
+        _require(request)
+        handler = _dismiss_handler
+        if handler is not None:
+            handler()
+        return {"ok": True}
+
     @app.post("/shutdown")
     def shutdown(request: Request):
         _require(request)
@@ -486,5 +506,6 @@ def start_background() -> bool:
     server = uvicorn.Server(config)
     _server = server
     threading.Thread(target=server.run, name="KuroApi", daemon=True).start()
+    logger.info("Kuro API routes: %s", [getattr(route, "path", "") for route in app.routes])
     logger.info("Kuro API listening on %s:%s", _HOST, port())
     return True

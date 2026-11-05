@@ -64,4 +64,28 @@ public class CoreTests
 
         Assert.True(worst <= 0.04 + 0.0001);
     }
+
+    [Fact]
+    public void Conversation_keeps_going_until_cleared_and_caps_at_twenty()
+    {
+        var buffer = new ConversationBuffer();
+        Assert.False(buffer.Observe("hello", "", "t0"));
+        Assert.True(buffer.Observe("hello", "Hi.", "t1"));
+        Assert.False(buffer.Observe("hello", "Hi.", "t1"));
+        Assert.False(buffer.Observe("(silence)", "nope", "t2"));
+        Assert.True(buffer.Observe("again", "Still here.", "t3"));
+        Assert.Equal(2, buffer.Turns.Count);
+
+        for (var i = 0; i < 25; i++)
+        {
+            Assert.True(buffer.Observe("u" + i, "a" + i, "t"));
+        }
+
+        Assert.Equal(ConversationBuffer.Cap, buffer.Turns.Count);
+        Assert.Equal("u24", buffer.Turns[^1].You);
+        buffer.Clear();
+        Assert.Empty(buffer.Turns);
+        Assert.True(buffer.Observe("fresh", "Yes.", "t"));
+        Assert.Equal("fresh", buffer.Turns[0].You);
+    }
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any, Callable
 
 import config
@@ -18,6 +19,7 @@ Personality guidelines:
 3. Confirmation: Always clearly confirm physical or external actions taken (e.g. "Lights and charger are powered on.") rather than remaining silent or vague.
 4. Tools: Use tools for news, screen reading, or smart home. For coming home / "daddy's home" / wake-up home cues, use control_smart_plug with scene daddy_home.
 5. Speed: Prefer the smallest correct action. Do not over-explain.
+6. WhatsApp: if they ask to send the clipboard, a link, or a message and do not name another person, the contact is me. Do not invent a contact and do not ask who.
 """
 
 _brain: "Brain | None" = None
@@ -64,16 +66,45 @@ class Brain:
 
         self.model = model_name or config.OLLAMA_MODEL
         self.client = ollama.Client()
+        self._messages: list[dict] = []
+        self._updated = 0.0
         logger.info("Ollama brain client ready (model=%s)", self.model)
+
+    def _thread(self, user_text: str) -> list[dict]:
+        """Keep the conversation until it is cleared. Cap at 20 turns."""
+        if not self._messages:
+            self._messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        self._messages.append({"role": "user", "content": user_text})
+        self._updated = time.time()
+        self._trim()
+        return self._messages
+
+    def _remember(self, reply: str) -> str:
+        self._messages.append({"role": "assistant", "content": reply})
+        self._updated = time.time()
+        self._trim()
+        return reply
+
+    def _trim(self) -> None:
+        if not self._messages:
+            return
+        system = self._messages[0]
+        rest = self._messages[1:]
+        if len(rest) > 40:
+            rest = rest[-40:]
+            if rest and rest[0].get("role") == "assistant":
+                rest = rest[1:]
+        self._messages = [system, *rest]
+
+    def clear(self) -> None:
+        self._messages = []
+        self._updated = 0.0
 
     def process(self, user_text: str, on_tool_start: Callable[[str], None] | None = None) -> str:
         if not user_text or not user_text.strip():
             return "I am listening, sir, but heard nothing."
 
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_text},
-        ]
+        messages = self._thread(user_text)
 
         tool_specs = _merged_tool_specs()
         hub_tool_names = _hub_tool_names(tool_specs)
@@ -93,8 +124,8 @@ class Brain:
         tool_calls = message.get("tool_calls", [])
 
         if not tool_calls:
-            content = message.get("content", "").strip()
-            return content or "Understood, sir."
+            content = message.get("content", "").strip() or "Understood, sir."
+            return self._remember(content)
 
         messages.append(message)
 
@@ -126,7 +157,7 @@ class Brain:
             messages.append({"role": "tool", "content": result_text})
 
             if result_text.startswith("Success:"):
-                return result_text.replace("Success:", "", 1).strip()
+                return self._remember(result_text.replace("Success:", "", 1).strip())
             if result_text.lower().startswith("latest headlines"):
                 lines = [ln.strip("- ").strip() for ln in result_text.splitlines()[1:4] if ln.strip()]
                 titles = []
@@ -135,7 +166,7 @@ class Brain:
                         ln = ln.split("] ", 1)[-1]
                     titles.append(ln.split(":", 1)[0].strip())
                 if titles:
-                    return "Headlines: " + ". ".join(titles[:3]) + "."
+                    return self._remember("Headlines: " + ". ".join(titles[:3]) + ".")
 
         try:
             final_response = self.client.chat(
@@ -144,10 +175,16 @@ class Brain:
                 options={"temperature": 0.3, "num_predict": 80},
             )
             final_content = final_response.get("message", {}).get("content", "").strip()
-            return final_content or "Action completed, sir."
+            return self._remember(final_content or "Action completed, sir.")
         except Exception as e:
             logger.error("Error in final Ollama response pass: %s", e)
-            return "I executed the command, but had trouble articulating the outcome."
+            return self._remember("I executed the command, but had trouble articulating the outcome.")
+
+
+def clear_thread() -> None:
+    """Drop the model conversation. Does not log the text."""
+    if _brain is not None:
+        _brain.clear()
 
 
 def think(user_text: str, on_tool_start: Callable[[str], None] | None = None) -> str:

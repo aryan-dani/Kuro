@@ -60,6 +60,16 @@ def find_local_song() -> Path | None:
     return None
 
 
+def output_active() -> bool:
+    """True when this player is already making sound. Does not start the mixer."""
+    with _lock:
+        if not _mixer_ready:
+            return False
+        import pygame
+
+        return bool(pygame.mixer.music.get_busy())
+
+
 def is_busy() -> bool:
     with _lock:
         if not _ensure_mixer():
