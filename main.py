@@ -22,8 +22,10 @@ import soundfile as sf
 
 import config
 import hub_client
+import media_hold
 import phrases
-from overlay import OverlayManager, OverlayState
+import timing
+from overlay import OverlayManager, OverlayState, voice_level
 from tray import KuroState, TrayManager
 
 SAMPLE_RATE = 16000
@@ -73,6 +75,7 @@ logger = logging.getLogger("kuro")
 # Push-to-talk recorder state
 _ptt_lock = threading.Lock()
 _ptt_active = False
+_followup = False
 _ptt_frames: list[np.ndarray] = []
 _ptt_stream: sd.InputStream | None = None
 _ptt_started_at = 0.0
@@ -81,7 +84,7 @@ _ptt_level_tick = 0
 _live_transcript = ""
 _cancel_speech = threading.Event()
 _early_home_fired = False
-BUSY_STALE_SECONDS = 12.0
+BUSY_STALE_SECONDS = 20.0
 
 
 def _force_unblock(reason: str = "reset") -> None:
@@ -90,6 +93,12 @@ def _force_unblock(reason: str = "reset") -> None:
     global _processing_started_at
 
     logger.warning("Force unblock (%s)", reason)
+    try:
+        import cancel
+
+        cancel.event.set()
+    except Exception:
+        pass
     _ptt_partial_stop.set()
     _cancel_speech.set()
     with _ptt_lock:
@@ -200,11 +209,9 @@ def _ptt_callback(indata, frames, time_info, status) -> None:  # noqa: ARG001
             return
         _ptt_frames.append(indata.copy())
 
-    # Live waveform level (0..1)
+    # Live waveform level (0..1). Raw laptop speech is too small to see.
     try:
-        peak = float(np.max(np.abs(indata.astype(np.float32)))) / 32768.0
-        rms = float(np.sqrt(np.mean(indata.astype(np.float32) ** 2))) / 32768.0
-        level = min(1.0, max(peak, rms * 2.2))
+        level = voice_level(indata)
         if overlay_manager:
             overlay_manager.push_level(level)
             _ptt_level_tick += 1
@@ -218,7 +225,7 @@ def _partial_transcribe_loop() -> None:
     """While holding PTT, caption live — and early-fire daddy's home the instant it matches."""
     global _live_transcript, _early_home_fired
     last_text = ""
-    while not _ptt_partial_stop.wait(0.9):
+    while not _ptt_partial_stop.wait(0.45):
         with _ptt_lock:
             if not _ptt_active or len(_ptt_frames) < 8:
                 continue
@@ -282,6 +289,12 @@ def start_push_to_talk() -> None:
     """Begin recording while the hotkey is held."""
     global _ptt_active, _ptt_frames, _ptt_stream, _ptt_started_at, _ptt_level_tick, _live_transcript, _early_home_fired
 
+    import engine_api
+
+    if engine_api.is_paused():
+        logger.info("Listening paused — ignore PTT start.")
+        return
+
     with process_lock:
         if is_processing:
             if _busy_is_stale():
@@ -309,6 +322,13 @@ def start_push_to_talk() -> None:
         _ptt_level_tick = 0
         _live_transcript = ""
         _early_home_fired = False
+
+    # Stop Spotify and anything else before the mic opens, or the music is transcribed.
+    timing.begin("voice")
+    timing.mark("hotkey_down")
+    media_hold.hold()
+
+    with _ptt_lock:
         try:
             global _MIC_DEVICE
             if _MIC_DEVICE is None:
@@ -324,10 +344,13 @@ def start_push_to_talk() -> None:
                 stream_kwargs["device"] = _MIC_DEVICE
             _ptt_stream = sd.InputStream(**stream_kwargs)
             _ptt_stream.start()
+            timing.mark("recording_start")
         except Exception:
             _ptt_active = False
             _ptt_stream = None
             logger.exception("Failed to open microphone stream")
+            timing.finish()
+            media_hold.release()
             if overlay_manager:
                 overlay_manager.set_state(OverlayState.ERROR, subtitle="Mic failed to open", hold_ms=3000)
             return
@@ -367,6 +390,7 @@ def stop_push_to_talk() -> None:
     except Exception:
         logger.exception("Error closing mic stream")
 
+    timing.mark("hotkey_up")
     elapsed = time.time() - started
     peak = 0
     if frames:
@@ -378,6 +402,15 @@ def stop_push_to_talk() -> None:
 
     if peak < 80:
         logger.warning("Mic peak very low (%s) — check Windows mic privacy / input device", peak)
+        if _followup:
+            if overlay_manager:
+                overlay_manager.set_open_mic(False)
+                overlay_manager.set_state(OverlayState.DONE, subtitle="Done", hold_ms=800)
+            if tray_manager:
+                tray_manager.set_state(KuroState.IDLE)
+            timing.finish()
+            media_hold.release()
+            return
         if overlay_manager:
             overlay_manager.set_state(
                 OverlayState.ERROR,
@@ -386,10 +419,21 @@ def stop_push_to_talk() -> None:
             )
         if tray_manager:
             tray_manager.set_state(KuroState.IDLE)
+        timing.finish()
+        media_hold.release()
         return
 
     if elapsed < MIN_PTT_SECONDS or not frames:
         logger.info("Clip too short — ignored.")
+        if _followup:
+            if overlay_manager:
+                overlay_manager.set_open_mic(False)
+                overlay_manager.set_state(OverlayState.DONE, subtitle="Done", hold_ms=800)
+            if tray_manager:
+                tray_manager.set_state(KuroState.IDLE)
+            timing.finish()
+            media_hold.release()
+            return
         if overlay_manager:
             overlay_manager.set_state(
                 OverlayState.ERROR,
@@ -398,6 +442,8 @@ def stop_push_to_talk() -> None:
             )
         if tray_manager:
             tray_manager.set_state(KuroState.IDLE)
+        timing.finish()
+        media_hold.release()
         return
 
     audio = np.concatenate(frames, axis=0)
@@ -406,6 +452,7 @@ def stop_push_to_talk() -> None:
         audio = audio[:max_samples]
 
     path = _save_wav(audio)
+    timing.mark("audio_saved")
     threading.Thread(
         target=process_audio_file,
         args=(path,),
@@ -417,6 +464,15 @@ def stop_push_to_talk() -> None:
 def record_fixed(duration: float) -> str:
     """Fixed-length capture for tray menu trigger."""
     logger.info("Fixed record for %.1fs (tray)", duration)
+    media_hold.hold()
+    try:
+        return _record_fixed(duration)
+    except Exception:
+        media_hold.release()
+        raise
+
+
+def _record_fixed(duration: float) -> str:
     recording = sd.rec(
         int(duration * SAMPLE_RATE),
         samplerate=SAMPLE_RATE,
@@ -446,7 +502,20 @@ def _is_hub_desk_phrase(text: str) -> bool:
 
 
 def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
-    """Hub first for desk rituals; inbox + LLM stay local. Returns reply, skip_tts, after_speak, force_fast."""
+    """Hub first for desk rituals. Meet, WhatsApp, workflows, and inbox stay on this laptop."""
+    local_only = phrases._normalize(user_prompt)
+    if (
+        phrases._is_meet(local_only)
+        or phrases._is_whatsapp(local_only)
+        or phrases._is_workflow(local_only)
+        or phrases._is_inbox(local_only)
+    ):
+        handled = phrases.try_handle(user_prompt)
+        if handled is not None:
+            if overlay_manager:
+                overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
+            return handled.reply, handled.skip_tts, handled.after_speak, handled.force_fast_tts
+
     if hub_client.configured():
         result = hub_client.command(user_prompt, early=False)
         if result is None:
@@ -491,9 +560,37 @@ def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
     return brain.think(user_prompt), False, None, False
 
 
+def _follow_up_listen() -> None:
+    """After a question, keep the mic open so the answer is the next turn."""
+    global _followup
+    time.sleep(0.4)
+    _followup = True
+    try:
+        start_push_to_talk()
+        if not _ptt_active:
+            return
+        if overlay_manager:
+            overlay_manager.set_open_mic(True)
+            overlay_manager.set_state(OverlayState.LISTENING, subtitle="Go on")
+        time.sleep(7.0)
+        if _ptt_active:
+            stop_push_to_talk()
+    finally:
+        _followup = False
+        if overlay_manager:
+            overlay_manager.set_open_mic(False)
+
+
+def _keep_music_stopped(text: str) -> bool:
+    t = phrases._normalize(text)
+    return phrases._is_pause(t) or phrases._is_stop_music(t) or phrases._is_goodnight(t)
+
+
 def process_audio_file(audio_file: str) -> None:
     """Transcribe -> hub / phrases / brain -> speak."""
     global is_processing, _live_transcript, _early_home_fired, _processing_started_at
+    asked = False
+    user_prompt = ""
     with process_lock:
         if is_processing:
             logger.info("Already processing — drop clip.")
@@ -518,6 +615,7 @@ def process_audio_file(audio_file: str) -> None:
         live = (_live_transcript or "").strip()
         logger.info("Transcribing full clip...")
         final = (_transcribe(audio_file, partial=False) or "").strip()
+        timing.mark("stt_done")
         user_prompt = final
         if not user_prompt and live:
             logger.info("Final STT empty — falling back to live: %r", live)
@@ -545,6 +643,7 @@ def process_audio_file(audio_file: str) -> None:
             overlay_manager.set_transcript(you=user_prompt)
 
         reply, skip_tts, after_speak, force_fast = _route_command(user_prompt)
+        timing.mark("route_done")
 
         logger.info('Kuro: "%s"', reply)
 
@@ -562,8 +661,12 @@ def process_audio_file(audio_file: str) -> None:
             except Exception:
                 logger.exception("after_speak failed")
 
+        asked = reply.strip().endswith("?")
         if overlay_manager:
-            overlay_manager.set_state(OverlayState.DONE, subtitle="Done", hold_ms=1200)
+            if asked:
+                overlay_manager.set_state(OverlayState.LISTENING, subtitle="Go on")
+            else:
+                overlay_manager.set_state(OverlayState.DONE, subtitle="Done", hold_ms=1200)
 
     except Exception as e:
         logger.exception("Error during interaction: %s", e)
@@ -580,6 +683,14 @@ def process_audio_file(audio_file: str) -> None:
         with process_lock:
             is_processing = False
             _processing_started_at = 0.0
+        timing.mark("idle")
+        timing.finish()
+        if asked and not _followup:
+            threading.Thread(target=_follow_up_listen, daemon=True, name="KuroFollow").start()
+        elif _keep_music_stopped(user_prompt):
+            media_hold.forget()
+        else:
+            media_hold.release()
 
 
 def on_tray_trigger() -> None:
@@ -602,6 +713,28 @@ def on_tray_trigger() -> None:
         process_audio_file(path)
 
     threading.Thread(target=_run, daemon=True, name="KuroTrayTrigger").start()
+
+
+def _write_heartbeat() -> None:
+    path = os.path.join(os.environ.get("LOCALAPPDATA", "."), "Kuro", "heartbeat.txt")
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="ascii") as f:
+            f.write(str(int(time.time())))
+    except Exception:
+        logger.debug("heartbeat write failed", exc_info=True)
+
+
+def _set_process_priority(*, below_normal: bool) -> None:
+    try:
+        import ctypes
+
+        # BELOW_NORMAL_PRIORITY_CLASS / NORMAL_PRIORITY_CLASS
+        cls = 0x00004000 if below_normal else 0x00000020
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), cls)
+        logger.info("Process priority %s", "below normal" if below_normal else "normal")
+    except Exception:
+        logger.debug("priority change skipped", exc_info=True)
 
 
 def register_push_to_talk(hotkey_str: str) -> None:
@@ -642,8 +775,12 @@ def register_push_to_talk(hotkey_str: str) -> None:
 
     def on_press(key):
         try:
+            import cancel
+
+            if cancel.synthetic_active():
+                return
             if key == pk.Key.esc:
-                logger.info("Escape — force unblock + hide overlay")
+                logger.info("Escape: force unblock + hide overlay")
                 _force_unblock("escape")
                 if overlay_manager:
                     overlay_manager.force_hide()
@@ -662,6 +799,10 @@ def register_push_to_talk(hotkey_str: str) -> None:
 
     def on_release(key):
         try:
+            import cancel
+
+            if cancel.synthetic_active():
+                return
             if key in (pk.Key.ctrl, pk.Key.ctrl_l, pk.Key.ctrl_r):
                 state["ctrl"] = False
             elif key in (pk.Key.alt, pk.Key.alt_l, pk.Key.alt_r):
@@ -677,6 +818,7 @@ def register_push_to_talk(hotkey_str: str) -> None:
     listener = pk.Listener(on_press=on_press, on_release=on_release)
     listener.start()
     logger.info("PTT listener active.")
+    _write_heartbeat()
 
     if overlay_manager:
         overlay_manager.set_state(
@@ -685,8 +827,12 @@ def register_push_to_talk(hotkey_str: str) -> None:
             hold_ms=2500,
         )
 
+    last_beat = time.time()
     while not stop_event.is_set():
         time.sleep(0.5)
+        if time.time() - last_beat >= 20.0:
+            _write_heartbeat()
+            last_beat = time.time()
     listener.stop()
 
 
@@ -705,6 +851,9 @@ def on_quit() -> None:
     if overlay_manager:
         overlay_manager.stop()
     os._exit(0)
+
+
+_BOOT_TICK = timing.tick()
 
 
 def main() -> None:
@@ -732,13 +881,80 @@ def main() -> None:
     overlay_manager = OverlayManager()
     overlay_manager.start()
 
-    # Warm STT in background so live hearing is snappy
-    def _warm_stt():
-        try:
-            from stt import transcribe  # noqa: F401
-            logger.info("STT ready for live hearing.")
-        except Exception:
-            logger.exception("STT warm-up failed")
+    _set_process_priority(below_normal=True)
+
+    def _heavy_gate_loop() -> None:
+        """Stay light until Performance mode on the real charger, then warm once."""
+        import compute_policy
+
+        held_since: float | None = None
+        stt_warmed = False
+        xtts_warmed = False
+        while not stop_event.is_set():
+            try:
+                ready = compute_policy.ready_for_heavy()
+            except Exception:
+                logger.exception("Heavy gate check failed")
+                ready = False
+            now = time.time()
+            if ready:
+                if held_since is None:
+                    held_since = now
+                    logger.info("Heavy gate open — warming Whisper")
+                if not stt_warmed:
+                    _set_process_priority(below_normal=False)
+                    try:
+                        import stt
+
+                        warm_started = timing.tick()
+                        label = stt.warm_for_policy()
+                        timing.once("startup", "whisper_load", timing.since(warm_started))
+                        logger.info("STT warm complete (%s)", label)
+                        stt_warmed = True
+                    except Exception:
+                        logger.exception("STT warm failed")
+                elif (not xtts_warmed) and (now - held_since) >= 15.0:
+                    try:
+                        import stt
+
+                        if stt.is_busy():
+                            logger.info("XTTS warm waiting until Whisper is idle")
+                        else:
+                            logger.info("Warming XTTS")
+                            warm_started = timing.tick()
+                            with stt.exclusive():
+                                import tts
+
+                                tts._warm_xtts(blocking=True)
+                            timing.once("startup", "xtts_load", timing.since(warm_started))
+                            logger.info("XTTS warm complete")
+                            xtts_warmed = True
+                    except Exception:
+                        logger.exception("XTTS warm failed")
+                        xtts_warmed = True
+            else:
+                if held_since is not None and not stt_warmed:
+                    logger.info("Heavy gate closed before warm — staying light")
+                held_since = None
+                if stt_warmed or xtts_warmed:
+                    logger.info("Leaving Performance/AC — unloading GPU models")
+                    try:
+                        import stt
+
+                        stt.unload_all()
+                    except Exception:
+                        logger.exception("STT unload failed")
+                    try:
+                        import tts
+
+                        tts.unload_model()
+                    except Exception:
+                        logger.exception("XTTS unload failed")
+                    stt_warmed = False
+                    xtts_warmed = False
+                    _set_process_priority(below_normal=True)
+            if stop_event.wait(5.0):
+                break
 
     def _warm_audio():
         try:
@@ -749,38 +965,39 @@ def main() -> None:
         except Exception:
             logger.exception("Audio warm-up failed")
 
-    def _warm_xtts():
-        try:
-            import compute_policy
-            import tts
-
-            if not compute_policy.should_preload_xtts():
-                print("[Kuro] Skipping XTTS preload (battery / Piper mode).")
-                return
-            print("[Kuro] Loading natural voice (XTTS) onto GPU...")
-            tts._warm_xtts(blocking=True)
-            print("[Kuro] Natural voice ready.")
-        except Exception:
-            logger.exception("XTTS warm-up failed")
-
     def _boot_policy():
         try:
             import compute_policy
 
             rep = compute_policy.device_report()
-            print(
-                f"[Kuro] Compute: mode={rep.get('mode')} stt={rep.get('stt')} "
-                f"tts={rep.get('tts')} cuda={rep.get('cuda')} "
-                f"charging={rep.get('power', {}).get('is_charging')} "
-                f"batt={rep.get('power', {}).get('battery_percent')}%"
+            heavy = rep.get("ready_for_heavy")
+            logger.info(
+                "Compute: mode=%s stt=%s tts=%s heavy=%s charging=%s batt=%s",
+                rep.get("mode"),
+                rep.get("stt"),
+                rep.get("tts"),
+                heavy,
+                rep.get("power", {}).get("is_charging"),
+                rep.get("power", {}).get("battery_percent"),
             )
+            if not heavy:
+                logger.info("Heavy warm skipped until Legion Performance and the real charger")
         except Exception:
             logger.exception("Compute policy report failed")
 
-    threading.Thread(target=_warm_stt, daemon=True, name="KuroSTTWarm").start()
     threading.Thread(target=_warm_audio, daemon=True, name="KuroAudioWarm").start()
-    threading.Thread(target=_warm_xtts, daemon=True, name="KuroXTTSWarm").start()
     threading.Thread(target=_boot_policy, daemon=True, name="KuroPolicyBoot").start()
+    threading.Thread(target=_heavy_gate_loop, daemon=True, name="KuroHeavyGate").start()
+
+    def _wa_warmup() -> None:
+        try:
+            from tools.wa_link import warmup
+
+            warmup()
+        except Exception:
+            logger.exception("WhatsApp link warmup failed")
+
+    threading.Thread(target=_wa_warmup, daemon=True, name="KuroWaLink").start()
 
     tray_manager = TrayManager(on_trigger=on_tray_trigger, on_quit=on_quit)
     tray_manager.start()
@@ -798,6 +1015,13 @@ def main() -> None:
     else:
         print("[Kuro] Hub: not configured (set KURO_HUB_TOKEN in .env)")
 
+    timing.once("startup", "ready_for_hotkey", timing.since(_BOOT_TICK))
+    import engine_api
+
+    if engine_api.api_requested():
+        engine_api.on_shutdown(on_quit)
+        engine_api.ensure_token()
+        engine_api.start_background()
     try:
         register_push_to_talk(config.KURO_HOTKEY)
     except KeyboardInterrupt:

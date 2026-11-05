@@ -30,6 +30,31 @@ _WAVE = "#E8E8E8"
 _SOFT = "#1A1A1A"
 _ERR = "#FFFFFF"
 
+_manager: "OverlayManager | None" = None
+
+
+def current() -> "OverlayManager | None":
+    """The running HUD, so other tools can share its window."""
+    return _manager
+
+
+def voice_level(samples) -> float:
+    """Turn a mic block into a 0..1 bar height. Laptop speech is quiet at full scale."""
+    import numpy as np
+
+    audio = np.abs(np.asarray(samples, dtype=np.float32))
+    if audio.size == 0:
+        return 0.0
+    peak = float(np.max(audio))
+    if peak > 1.5:
+        audio = audio / 32768.0
+        peak = peak / 32768.0
+    rms = float(np.sqrt(np.mean(np.square(audio))))
+    raw = max(peak, rms * 3.0)
+    if raw < 0.012:
+        return min(1.0, raw * 2.0)
+    return min(1.0, (raw - 0.012) * 16.0)
+
 
 class OverlayManager:
     """Thread-safe bottom-center monochrome card with fluid mic waveform."""
@@ -59,10 +84,17 @@ class OverlayManager:
         self._hiding = False
         self._lift = 24.0  # slide-up residual
         self._energy = 0.0  # smoothed peak for border pulse
+        self._heard = False
+        self._open_mic = False
+        self._link = None
+        self._link_holder = None
+        self._link_photo = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
+        global _manager
+        _manager = self
         self._thread = threading.Thread(target=self._run, name="KuroOverlay", daemon=True)
         self._thread.start()
         for _ in range(100):
@@ -87,23 +119,50 @@ class OverlayManager:
     def set_transcript(self, you: str | None = None, kuro: str | None = None) -> None:
         self._q.put(("transcript", {"you": you, "kuro": kuro}))
 
+    def snapshot(self) -> dict:
+        """State and 11 bar levels. No transcript text."""
+        with self._level_lock:
+            raw = list(self._levels)
+        if not raw:
+            bars = [0.0] * 11
+        elif len(raw) <= 11:
+            bars = raw + [0.0] * (11 - len(raw))
+        else:
+            step = len(raw) / 11
+            bars = [raw[min(len(raw) - 1, int(i * step))] for i in range(11)]
+        state = self._state.value if isinstance(self._state, OverlayState) else str(self._state)
+        return {"state": state, "levels": [round(float(v), 3) for v in bars]}
+
+    def transcript_pair(self) -> tuple[str, str]:
+        return self._you or "", self._kuro or ""
+
     def push_level(self, level: float) -> None:
         level = max(0.0, min(1.0, float(level)))
+        if level >= 0.08:
+            self._heard = True
         with self._level_lock:
             self._levels.append(level)
             if len(self._levels) > self.WAVE_BARS:
                 self._levels = self._levels[-self.WAVE_BARS :]
 
     def clear_levels(self) -> None:
+        self._heard = False
         with self._level_lock:
             self._levels = [0.0] * self.WAVE_BARS
             self._smooth_levels = [0.0] * self.WAVE_BARS
+
+    def set_open_mic(self, on: bool) -> None:
+        self._open_mic = bool(on)
 
     def set_rec_seconds(self, seconds: float) -> None:
         self._q.put(("rec_seconds", {"seconds": seconds}))
 
     def force_hide(self) -> None:
         self._q.put(("force_hide", {}))
+
+    def show_link_code(self, path: str | None) -> None:
+        """Show or close the WhatsApp link code on this window's Tk loop."""
+        self._q.put(("link_code", {"path": path}))
 
     def flash(self, title: str, subtitle: str = "", hold_ms: int = 2200, accent: str | None = None) -> None:
         state = (
@@ -176,8 +235,11 @@ class OverlayManager:
     def _show(self) -> None:
         if self._root is None:
             return
+        already = (not self._hiding) and self._alpha > 0.5 and self._root.state() != "withdrawn"
         self._hiding = False
         self._alpha_target = 0.96
+        if already:
+            return
         self._lift = 28.0
         self._position(extra_y=int(self._lift))
         self._root.deiconify()
@@ -287,7 +349,12 @@ class OverlayManager:
 
         status = self._status
         if self._state == OverlayState.LISTENING:
-            status = f"{self._rec_seconds:0.1f}s  ·  release to send"
+            if self._heard:
+                status = "Hearing you"
+            elif self._open_mic:
+                status = "Go on"
+            else:
+                status = f"{self._rec_seconds:0.1f}s  ·  release to send"
         c.create_text(20, 46, text=status or "", fill=_DIM, font=("Segoe UI", 9), anchor="w", width=460)
 
         self._draw_waveform(20, 62, self.WIDTH - 40, 52)
@@ -295,7 +362,14 @@ class OverlayManager:
         you = self._wrap(self._you)
         kuro = self._wrap(self._kuro)
         c.create_text(20, 128, text="YOU", fill=_DIM, font=("Segoe UI", 8), anchor="w")
-        hearing = you if you else ("…" if self._state == OverlayState.LISTENING else "—")
+        if you:
+            hearing = you
+        elif self._state == OverlayState.LISTENING and self._heard:
+            hearing = "Hearing you"
+        elif self._state == OverlayState.LISTENING:
+            hearing = "…"
+        else:
+            hearing = "—"
         c.create_text(20, 144, text=hearing, fill=_INK, font=("Segoe UI", 11), anchor="nw", width=460)
 
         c.create_text(20, 180, text="KURO", fill=_DIM, font=("Segoe UI", 8), anchor="w")
@@ -321,7 +395,7 @@ class OverlayManager:
             # Voice-reactive with gentle idle motion
             amp = lvl
             if self._state == OverlayState.LISTENING:
-                amp = max(amp, 0.04 + 0.03 * abs(math.sin(self._tick / 14.0 + i * 0.2)))
+                amp = min(1.0, max(amp * 1.35, 0.05 + 0.04 * abs(math.sin(self._tick / 14.0 + i * 0.2))))
                 # Neighbor bleed for fluid look
                 if i > 0:
                     amp = max(amp, levels[i - 1] * 0.35)
@@ -365,6 +439,7 @@ class OverlayManager:
             self._visible_until = 0.0
             if state == OverlayState.LISTENING:
                 self._rec_seconds = 0.0
+                self._heard = False
         else:
             default_hold = {
                 OverlayState.DONE: 1200,
@@ -400,6 +475,8 @@ class OverlayManager:
                         self._show()
                 elif kind == "rec_seconds":
                     self._rec_seconds = float((payload or {}).get("seconds") or 0.0)
+                elif kind == "link_code":
+                    self._apply_link((payload or {}).get("path"))
         except queue.Empty:
             pass
 
@@ -419,12 +496,12 @@ class OverlayManager:
         if self._root is None:
             return
 
-        # Ease alpha + slide
+        # Ease alpha + slide. Leave the window where it landed so it does not flicker.
         self._alpha += (self._alpha_target - self._alpha) * 0.22
         self._lift += (0.0 - self._lift) * 0.18
-        if abs(self._alpha - self._alpha_target) > 0.01 or self._alpha > 0.08:
+        if abs(self._alpha - self._alpha_target) > 0.01:
             self._set_alpha(self._alpha)
-        if self._root.state() != "withdrawn":
+        if self._lift > 0.5 and self._root.state() != "withdrawn":
             self._position(extra_y=int(self._lift))
 
         if self._state != OverlayState.HIDDEN and self._root.state() != "withdrawn":
@@ -432,6 +509,49 @@ class OverlayManager:
             self._redraw()
 
         if self._hiding and self._alpha < 0.08:
-            self._finish_hide()
+            if self._state in (OverlayState.LISTENING, OverlayState.THINKING, OverlayState.SPEAKING):
+                self._hiding = False
+                self._alpha_target = 0.96
+            else:
+                self._finish_hide()
 
         self._root.after(16, self._animate)
+
+    def _apply_link(self, path: str | None) -> None:
+        """WhatsApp link code on this Tk loop. A second Tk fights the HUD."""
+        if self._root is None:
+            return
+        if not path:
+            if self._link is not None:
+                try:
+                    self._link.destroy()
+                except Exception:
+                    pass
+                self._link = None
+                self._link_holder = None
+                self._link_photo = None
+            return
+        try:
+            from PIL import Image, ImageTk
+        except Exception:
+            return
+        if self._link is None or not self._link.winfo_exists():
+            win = tk.Toplevel(self._root)
+            win.title("Link Kuro")
+            win.attributes("-topmost", True)
+            win.resizable(False, False)
+            tk.Label(
+                win,
+                text="On your phone: WhatsApp, Linked devices, Link a device.\nScan this code. It refreshes on its own.",
+                justify="left",
+                padx=16,
+                pady=12,
+            ).pack()
+            self._link_holder = tk.Label(win, bg="white")
+            self._link_holder.pack(padx=16, pady=(0, 16))
+            self._link = win
+        image = Image.open(path).convert("RGB")
+        image.thumbnail((360, 360))
+        self._link_photo = ImageTk.PhotoImage(image, master=self._link)
+        if self._link_holder is not None:
+            self._link_holder.configure(image=self._link_photo, width=image.size[0], height=image.size[1])

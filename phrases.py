@@ -139,6 +139,9 @@ def matches(text: str) -> bool:
             _is_power_on(t),
             _is_news(t),
             _is_inbox(t),
+            _is_meet(t),
+            _is_whatsapp(t),
+            _is_workflow(t),
         )
     )
 
@@ -181,10 +184,19 @@ def try_handle(text: str) -> PhraseResult | None:
         raw = tools.execute_tool("get_news", {"topic": topic})
         return PhraseResult(_news_to_speech(raw))
 
+    if _is_meet(t):
+        return PhraseResult(_meet_reply(t), force_fast_tts=True)
+
     if _is_inbox(t):
         mode = _inbox_mode(t)
         raw = tools.execute_tool("check_inbox", {"mode": mode})
-        return PhraseResult(_inbox_to_speech(raw))
+        return PhraseResult(_inbox_to_speech(raw), force_fast_tts=True)
+
+    if _is_whatsapp(t):
+        return PhraseResult(_whatsapp_reply(t), force_fast_tts=True)
+
+    if _is_workflow(t):
+        return PhraseResult(_workflow_reply(t), force_fast_tts=True)
 
     return None
 
@@ -208,8 +220,9 @@ def _power(scene: str, *, speak_ok: str) -> str:
 
 
 def _desk_keywords(t: str) -> bool:
+    # Whole words. "board" must not match inside "clipboard".
     return any(
-        w in t
+        _has_word(t, w)
         for w in (
             "light",
             "lights",
@@ -373,6 +386,90 @@ def _is_inbox(t: str) -> bool:
             "missed mail",
         )
     )
+
+
+def _is_meet(t: str) -> bool:
+    try:
+        from tools.meet import match_phrase
+
+        return match_phrase(t) is not None
+    except Exception:
+        logger.exception("Meet phrase match failed")
+        return False
+
+
+def _meet_reply(t: str) -> str:
+    try:
+        from tools.meet import match_phrase
+
+        found = match_phrase(t) or {}
+        raw = tools.execute_tool("make_meet", {"contact": found.get("contact") or ""})
+        return _speakable(raw)
+    except Exception:
+        logger.exception("Meet phrase failed")
+        return "I couldn't create that Google Meet."
+
+
+def _is_whatsapp(t: str) -> bool:
+    try:
+        from tools.whatsapp import match_phrase
+
+        return match_phrase(t) is not None
+    except Exception:
+        logger.exception("WhatsApp phrase match failed")
+        return False
+
+
+def _is_workflow(t: str) -> bool:
+    try:
+        from tools.n8n import match_phrase
+
+        return match_phrase(t) is not None
+    except Exception:
+        logger.exception("Workflow phrase match failed")
+        return False
+
+
+def _speakable(raw: str) -> str:
+    text = (raw or "").strip()
+    if text.lower().startswith("success:"):
+        text = text.split(":", 1)[1].strip()
+    return text or "Done, sir."
+
+
+def _whatsapp_reply(t: str) -> str:
+    try:
+        from tools.whatsapp import match_phrase
+
+        found = match_phrase(t)
+        if not found:
+            return "I don't know who to message."
+        raw = tools.execute_tool(
+            "send_whatsapp",
+            {"contact": found["contact"], "source": found["source"], "text": ""},
+        )
+        return _speakable(raw)
+    except Exception:
+        logger.exception("WhatsApp phrase failed")
+        return "I couldn't send that WhatsApp."
+
+
+def _workflow_reply(t: str) -> str:
+    try:
+        from tools.n8n import match_phrase
+
+        found = match_phrase(t)
+        if not found:
+            return "I don't know that workflow."
+        wf, extra = found
+        raw = tools.execute_tool(
+            "run_workflow",
+            {"workflow": wf["id"], "input": extra},
+        )
+        return _speakable(raw)
+    except Exception:
+        logger.exception("Workflow phrase failed")
+        return "I couldn't run that workflow."
 
 
 def _inbox_mode(t: str) -> str:
