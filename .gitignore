@@ -24,6 +24,8 @@ wheels/
 *.egg
 
 # Secrets and environment
+credentials.json
+token.json
 .env
 .env.local
 .env.*
@@ -31,6 +33,11 @@ wheels/
 
 # Local caches / device discovery (may contain IDs)
 snapshot.json
+api_token
+timing.csv
+timing_*.csv
+tuya_endpoint.json
+shell_settings.json
 
 # Heavy local assets (download/warm separately)
 models/
@@ -51,6 +58,11 @@ bench/battery_discharge.json
 
 # Nested third-party checkout (has its own git history)
 Bruno/
+
+# WinUI build output
+KuroShell/**/bin/
+KuroShell/**/obj/
+KuroShell/**/AppPackages/
 
 # Editor / OS
 .vscode/
