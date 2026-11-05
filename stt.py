@@ -33,12 +33,34 @@ _active_backend: str | None = None  # last resolved backend name
 _ROOT = Path(__file__).resolve().parent
 _OV_SMALL = _ROOT / "bench" / "models" / "whisper-small.en-int8"
 
-_INITIAL_PROMPT = (
+_INITIAL_PROMPT_BASE = (
     "Wake up daddy's home. Good night sir. Pause the song. Resume the song. "
     "Stop the music. What's the news today. Turn on the lights. Turn off the lights. "
     "Switch the lights off. Monitor off. Monitor on. Desk off. Desk on. "
-    "Power on. Power off. Any urgent mail. Inbox check. Deadlines today. Hello Kuro."
+    "Power on. Power off. Any urgent mail. Inbox check. Deadlines today. Hello Kuro. "
+    "Send the Google Meet link to Mom. Make a Google Meet."
 )
+
+
+def _startup_prompt() -> str:
+    """Bias Whisper toward workflow aliases and contact names. Never raises."""
+    extra = ""
+    try:
+        from tools.n8n import prompt_fragment
+
+        extra += prompt_fragment() or ""
+    except Exception:
+        pass
+    try:
+        from tools.whatsapp import prompt_fragment as contact_fragment
+
+        extra += contact_fragment() or ""
+    except Exception:
+        pass
+    return _INITIAL_PROMPT_BASE + extra
+
+
+_INITIAL_PROMPT = _startup_prompt()
 
 
 def _site_packages() -> Path:
@@ -299,6 +321,42 @@ def force_cuda() -> bool:
             return False
 
 
+def is_busy() -> bool:
+    """True while Whisper is loading or transcribing."""
+    if not _stt_lock.acquire(blocking=False):
+        return True
+    _stt_lock.release()
+    return False
+
+
+def exclusive():
+    """Hold the Whisper lock so a voice warm cannot overlap a transcription."""
+    return _stt_lock
+
+
+def unload_all() -> None:
+    """Drop Whisper weights so Quiet/battery does not keep the GPU resident."""
+    global _active_backend, _device_label
+    with _stt_lock:
+        _unload_cuda()
+        _unload_npu()
+        _unload_cpu()
+        _active_backend = None
+        _device_label = "unloaded"
+
+
+def warm_for_policy() -> str:
+    """Load the backend compute_policy wants right now. Returns the label."""
+    import compute_policy
+
+    backend = compute_policy.prefer_stt()
+    with _stt_lock:
+        chosen = _ensure_backend(backend)
+        global _device_label
+        _device_label = chosen
+        return chosen
+
+
 def backend_label() -> str:
     return _active_backend or "unloaded"
 
@@ -345,12 +403,18 @@ def _transcribe_faster_whisper(model, audio_input: str, *, partial: bool) -> str
         speech_pad_ms=450,
     )
     beam = 1 if partial else int(os.getenv("KURO_WHISPER_BEAM", "5") or "5")
+    if not partial and beam > 1:
+        try:
+            if isinstance(audio_input, str) and sf.info(audio_input).duration <= 12.0:
+                beam = 1
+        except Exception:
+            pass
     segments, _info = model.transcribe(
         audio_input,
         language="en",
         beam_size=beam,
-        best_of=1 if partial else min(max(beam, 1), 5),
-        temperature=0.0 if partial else [0.0, 0.2],
+        best_of=1 if beam == 1 else min(max(beam, 1), 5),
+        temperature=0.0 if beam == 1 else [0.0, 0.2],
         vad_filter=not partial,
         vad_parameters=vad_params,
         condition_on_previous_text=False,
