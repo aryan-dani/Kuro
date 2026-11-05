@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 _piper_voice = None
 _piper_lock = threading.Lock()
+_clip_cache: dict[str, np.ndarray] = {}
+_CLIP_LIMIT = 8
 
 # Agreement for Coqui Public Model License
 os.environ["COQUI_TOS_AGREED"] = "1"
@@ -193,6 +195,12 @@ def speak(text: str, *, fast: bool = False):
         _last_spoken = cleaned_text
         _last_spoken_at = now
 
+        # Their cloned voice when it is already loaded. A cold load must not block the reply.
+        if is_ready():
+            fast = False
+        elif not fast and len(cleaned_text) <= 80:
+            fast = True
+
         print(f'\n[Kuro speaking]: "{cleaned_text}"')
         logger.info('Speaking: "%s" (fast=%s xtts_ready=%s)', cleaned_text, fast, is_ready())
 
@@ -218,26 +226,23 @@ def speak(text: str, *, fast: bool = False):
                 logger.warning("Piper failed (%s); falling back", e)
                 engine = "xtts" if compute_policy.on_ac() and not fast else "pyttsx3"
 
-        if engine == "xtts":
-            if is_ready():
-                try:
-                    _speak_xtts(cleaned_text)
-                    return
-                except Exception as e:
-                    logger.warning("XTTS failed (%s); falling back to pyttsx3", e)
-            elif not fast and compute_policy.should_preload_xtts():
-                try:
-                    _warm_xtts(blocking=True)
-                    _speak_xtts(cleaned_text)
-                    return
-                except Exception as e:
-                    logger.warning("XTTS warm/speak failed (%s)", e)
+        if engine == "xtts" and is_ready():
+            try:
+                _speak_xtts(cleaned_text)
+                return
+            except Exception as e:
+                logger.warning("XTTS failed (%s); falling back to pyttsx3", e)
 
+        # Never load XTTS inside a reply. A cold model is what made speech lag.
+        if engine == "xtts":
+            logger.info("XTTS not ready; speaking with the fast voice")
+            if compute_policy._piper_available():
+                try:
+                    _speak_piper(cleaned_text)
+                    return
+                except Exception as e:
+                    logger.warning("Piper failed (%s); falling back", e)
         _speak_pyttsx3(cleaned_text)
-        if engine == "xtts" and not is_ready() and compute_policy.should_preload_xtts():
-            threading.Thread(
-                target=lambda: _warm_xtts(blocking=True), daemon=True, name="KuroXTTSWarm"
-            ).start()
 
 
 def _warm_xtts(blocking: bool = True) -> None:
@@ -303,34 +308,119 @@ def _speak_piper(cleaned_text: str) -> None:
     peak = float(np.max(np.abs(audio_data))) + 1e-8
     audio_data = np.clip(audio_data * (0.9 / peak), -1.0, 1.0)
     logger.info("Piper synthesis %.2fs", time.perf_counter() - start)
+    import timing
+
+    timing.mark("tts_first_audio")
     sd.play(audio_data, samplerate=sample_rate)
     sd.wait()
+    timing.mark("tts_done")
 
 
-def _speak_xtts(cleaned_text: str) -> None:
-    model = get_model()
-    speaker_wav = get_speaker_wav()
-    gpt_cond_latent, speaker_embedding = get_conditioning(speaker_wav)
-    lang = config.XTTS_LANGUAGE or "en"
+def _remember_clip(text: str, audio: np.ndarray) -> None:
+    if len(text) > 80 or audio.size == 0:
+        return
+    if text not in _clip_cache and len(_clip_cache) >= _CLIP_LIMIT:
+        _clip_cache.pop(next(iter(_clip_cache)))
+    _clip_cache[text] = audio
 
-    start_time = time.perf_counter()
+
+def _play_cached(audio: np.ndarray) -> None:
+    import timing
+
+    timing.mark("tts_first_audio")
+    sd.play(audio, samplerate=24000)
+    sd.wait()
+    timing.mark("tts_done")
+
+
+def _sentences(text: str) -> list[str]:
+    parts: list[str] = []
+    buf: list[str] = []
+    for ch in text.strip():
+        buf.append(ch)
+        if ch in ".!?":
+            piece = "".join(buf).strip()
+            if piece:
+                parts.append(piece)
+            buf = []
+    tail = "".join(buf).strip()
+    if tail:
+        parts.append(tail)
+    return parts or [text]
+
+
+def _synthesize_sentence(model, text: str, lang: str, gpt_cond_latent, speaker_embedding) -> np.ndarray:
     out = model.inference(
-        text=cleaned_text,
+        text=text,
         language=lang,
         gpt_cond_latent=gpt_cond_latent,
         speaker_embedding=speaker_embedding,
         temperature=0.65,
         speed=1.1,
     )
-    inference_time = time.perf_counter() - start_time
-    logger.info("XTTS synthesis %.2fs on %s", inference_time, get_device())
+    audio = np.asarray(out["wav"], dtype=np.float32).reshape(-1)
+    peak = float(np.max(np.abs(audio))) + 1e-8
+    return np.clip(audio * (0.9 / peak), -1.0, 1.0)
 
-    audio_data = np.array(out["wav"], dtype=np.float32)
-    # Audibility boost
-    peak = float(np.max(np.abs(audio_data))) + 1e-8
-    audio_data = np.clip(audio_data * (0.9 / peak), -1.0, 1.0)
-    sd.play(audio_data, samplerate=24000)
-    sd.wait()
+
+def _speak_xtts(cleaned_text: str) -> None:
+    cached = _clip_cache.get(cleaned_text)
+    if cached is not None:
+        logger.info("XTTS clip cache hit")
+        _play_cached(cached)
+        return
+
+    model = get_model()
+    speaker_wav = get_speaker_wav()
+    gpt_cond_latent, speaker_embedding = get_conditioning(speaker_wav)
+    lang = config.XTTS_LANGUAGE or "en"
+    import queue
+    import timing
+
+    sentences = _sentences(cleaned_text)
+    pending: queue.Queue = queue.Queue(maxsize=1)
+    errors: list[BaseException] = []
+
+    def _produce() -> None:
+        try:
+            for sentence in sentences:
+                pending.put(
+                    _synthesize_sentence(
+                        model, sentence, lang, gpt_cond_latent, speaker_embedding
+                    )
+                )
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            pending.put(None)
+
+    threading.Thread(target=_produce, name="kuro-xtts", daemon=True).start()
+    start_time = time.perf_counter()
+    pieces: list[np.ndarray] = []
+    player = sd.OutputStream(samplerate=24000, channels=1, dtype="float32")
+    player.start()
+    started_audio = False
+    try:
+        while True:
+            audio = pending.get()
+            if audio is None:
+                break
+            pieces.append(audio)
+            if not started_audio:
+                timing.mark("tts_first_audio")
+                started_audio = True
+            player.write(np.ascontiguousarray(audio.reshape(-1, 1)))
+    finally:
+        player.stop()
+        player.close()
+    if errors:
+        raise errors[0]
+    if not started_audio:
+        timing.mark("tts_first_audio")
+    timing.mark("tts_done")
+    logger.info("XTTS sentences %.2fs on %s", time.perf_counter() - start_time, get_device())
+    if pieces:
+        _remember_clip(cleaned_text, np.concatenate(pieces))
 
 
 def _speak_pyttsx3(cleaned_text: str) -> None:
@@ -349,8 +439,12 @@ def _speak_pyttsx3(cleaned_text: str) -> None:
                     break
         except Exception:
             pass
+        import timing
+
+        timing.mark("tts_first_audio")
         engine.say(cleaned_text)
         engine.runAndWait()
+        timing.mark("tts_done")
         try:
             engine.stop()
         except Exception:
