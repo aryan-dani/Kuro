@@ -1,4 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+
+[assembly: SuppressMessage("Reliability", "CA1806:Do not ignore method results", Scope = "type", Target = "~T:KuroShell.WindowChrome")]
 
 namespace KuroShell;
 
@@ -147,6 +150,19 @@ internal static class WindowChrome
         var x = work.Left + Math.Max(0, (area - width) / 2) - optical;
         var y = work.Bottom - height - gapPixels;
         return (x, y, width, height);
+    }
+
+    public static (int Left, int Top, int Right, int Bottom) PrimaryWork()
+    {
+        var monitor = MonitorFromPoint(default, MonitorDefaultToPrimary);
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        if (!GetMonitorInfo(monitor, ref info))
+        {
+            return (0, 0, 0, 0);
+        }
+
+        var work = info.Work;
+        return (work.Left, work.Top, work.Right, work.Bottom);
     }
 
     public static (int X, int Y) WorkCenter()

@@ -1,4 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+
+[assembly: SuppressMessage("Reliability", "CA1806:Do not ignore method results", Scope = "type", Target = "~T:KuroShell.NativeCapsule")]
 
 namespace KuroShell;
 
@@ -14,6 +17,16 @@ internal sealed class NativeCapsule
     private const int WsExNoactivate = 0x08000000;
     private const int WsExLayered = 0x00080000;
     private const uint SwpNoactivate = 0x0010;
+    private const uint SwpNomove = 0x0002;
+    private int _anchorX;
+    private int _anchorY;
+    private int _appliedW;
+    private int _appliedH;
+    private int _workL;
+    private int _workT;
+    private int _workR;
+    private int _workB;
+    private bool _anchored;
     private const uint SwpShowwindow = 0x0040;
     private const int SwShowNoactivate = 4;
     private const int SwHide = 0;
@@ -112,6 +125,16 @@ internal sealed class NativeCapsule
         }
 
         var place = WindowChrome.Place(_width, _height, _bottomInset);
+        _anchorX = place.X;
+        _anchorY = place.Y;
+        _appliedW = _width;
+        _appliedH = _height;
+        var work = WindowChrome.PrimaryWork();
+        _workL = work.Left;
+        _workT = work.Top;
+        _workR = work.Right;
+        _workB = work.Bottom;
+        _anchored = true;
         SetWindowPos(_hwnd, HwndTopmost, place.X, place.Y, _width, _height, SwpNoactivate | SwpShowwindow);
         ShowWindow(_hwnd, SwShowNoactivate);
         Visible = true;
@@ -255,8 +278,36 @@ internal sealed class NativeCapsule
             return;
         }
 
-        var place = WindowChrome.Place(_width, _height, _bottomInset);
-        SetWindowPos(_hwnd, HwndTopmost, place.X, place.Y, _width, _height, SwpNoactivate | SwpShowwindow);
+        var work = WindowChrome.PrimaryWork();
+        var displayChanged = !_anchored
+            || work.Left != _workL
+            || work.Top != _workT
+            || work.Right != _workR
+            || work.Bottom != _workB;
+        if (displayChanged)
+        {
+            var place = WindowChrome.Place(_width, _height, _bottomInset);
+            _anchorX = place.X;
+            _anchorY = place.Y;
+            _workL = work.Left;
+            _workT = work.Top;
+            _workR = work.Right;
+            _workB = work.Bottom;
+            _anchored = true;
+            SetWindowPos(_hwnd, HwndTopmost, _anchorX, _anchorY, _width, _height, SwpNoactivate | SwpShowwindow);
+            _appliedW = _width;
+            _appliedH = _height;
+            return;
+        }
+
+        if (_appliedW == _width && _appliedH == _height)
+        {
+            return;
+        }
+
+        SetWindowPos(_hwnd, HwndTopmost, 0, 0, _width, _height, SwpNoactivate | SwpShowwindow | SwpNomove);
+        _appliedW = _width;
+        _appliedH = _height;
     }
 
     private bool IsThinkingCaption()
@@ -346,7 +397,7 @@ internal sealed class NativeCapsule
             && (_mode is "thinking" or "processing" or "error" || _caption is "Quiet" or "Hold" or "Thinking");
     }
 
-    private void OpaqueizeText(IntPtr bits, byte[] baseline)
+    private static void OpaqueizeText(IntPtr bits, byte[] baseline)
     {
         var painted = new byte[baseline.Length];
         Marshal.Copy(bits, painted, 0, painted.Length);
@@ -540,12 +591,25 @@ internal sealed class NativeCapsule
             var sample = BarLevel(heights, index, BarCount);
             // Quiet rest is a low center arch. Speech lifts bars from the mic shape.
             var rest = 0.1 + (0.22 * center * center);
-            if (sample < 0.05)
+            if (sample < 0.02)
             {
                 return rest;
             }
 
             return Math.Clamp(rest + (Math.Pow(sample, 0.85) * (0.9 - (rest * 0.35))), 0.1, 1);
+        }
+
+        if (_mode is "thinking" or "processing")
+        {
+            var wave = 0.5 + (0.5 * Math.Sin((_phase * 2.4) - (index * 0.55)));
+            return Math.Clamp(0.12 + (0.55 * wave * (0.35 + (0.65 * center))), 0.1, 1);
+        }
+
+        // Idle: soft pulse so the capsule never looks frozen.
+        if (_mode is "idle" or "hidden")
+        {
+            var pulse = 0.5 + (0.5 * Math.Sin((_phase * 1.1) + (index * 0.2)));
+            return Math.Clamp(0.1 + (0.18 * center * center) + (0.08 * pulse), 0.1, 0.45);
         }
 
         return Math.Clamp(0.1 + (0.22 * center * center), 0.1, 1);

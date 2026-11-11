@@ -201,7 +201,7 @@ public sealed partial class MainWindow : Window
         _loading = false;
     }
 
-    private UIElement Choice(string label, string key, string[] options, JsonDocument config)
+    private Border Choice(string label, string key, string[] options, JsonDocument config)
     {
         var current = config.RootElement.TryGetProperty(key, out var value) ? value.GetString() ?? options[0] : options[0];
         var box = new ComboBox
@@ -233,7 +233,7 @@ public sealed partial class MainWindow : Window
         return row;
     }
 
-    private UIElement LanguageRow(JsonDocument config)
+    private Border LanguageRow(JsonDocument config)
     {
         var current = config.RootElement.TryGetProperty("xtts_language", out var value) ? value.GetString() ?? "en" : "en";
         var box = new TextBox
@@ -494,7 +494,7 @@ public sealed partial class MainWindow : Window
     {
         if (DateTime.TryParse(at, out var parsed))
         {
-            return parsed.ToString("h:mm tt");
+            return parsed.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
         }
 
         return at;

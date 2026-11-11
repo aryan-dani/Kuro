@@ -12,7 +12,7 @@ namespace KuroShell;
 /// <summary>
 /// Dark transcript card above the native capsule. Opens on pill click; collapses on chevron.
 /// </summary>
-public sealed class HudWindow : Window
+public sealed class HudWindow : Window, IDisposable
 {
     private const double DockGap = 12;
     private const double DockWidth = 640;
@@ -37,6 +37,7 @@ public sealed class HudWindow : Window
     private bool _shown;
     private bool _showIdleDot;
     private bool _suppress;
+    private bool _forceHidden;
     private bool _dockOpen;
     private bool _animating;
     public HudWindow()
@@ -150,12 +151,27 @@ public sealed class HudWindow : Window
     public void ShowState(string state, string? label = null)
     {
         var next = string.IsNullOrWhiteSpace(state) ? "hidden" : state;
-        if (_suppress && next != "hidden")
+        var active = next is "listening" or "thinking" or "processing" or "speaking" or "error";
+
+        // X / Escape hide the capsule until the next real turn.
+        if (_forceHidden)
+        {
+            if (!active)
+            {
+                return;
+            }
+
+            _forceHidden = false;
+            _suppress = false;
+        }
+
+        // After dismiss, ignore stale speaking/thinking frames until a fresh active state.
+        if (_suppress && !active)
         {
             return;
         }
 
-        if (next == "hidden")
+        if (active)
         {
             _suppress = false;
         }
@@ -270,8 +286,11 @@ public sealed class HudWindow : Window
         }
 
         _suppress = true;
+        _forceHidden = true;
+        _state = "hidden";
+        _shown = false;
         HideDock(immediate: true);
-        ShowState("hidden");
+        _native.Hide();
         DismissRequested?.Invoke();
     }
 
@@ -423,7 +442,7 @@ public sealed class HudWindow : Window
         WindowChrome.ShowTopmost(hwnd, x, y, pixelsW, pixelsH, activate);
     }
 
-    private void ClipCard(IntPtr hwnd)
+    private static void ClipCard(IntPtr hwnd)
     {
         var scale = WindowChrome.DpiScale(hwnd);
         var pixelsW = Math.Max(1, (int)Math.Ceiling(DockWidth * scale));
@@ -558,9 +577,15 @@ public sealed class HudWindow : Window
     {
         if (DateTime.TryParse(at, out var parsed))
         {
-            return parsed.ToString("h:mm tt");
+            return parsed.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
         }
 
         return at;
+    }
+
+    public void Dispose()
+    {
+        _escape.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

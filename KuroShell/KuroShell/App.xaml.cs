@@ -4,7 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace KuroShell;
 
-public partial class App : Application
+public partial class App : Application, IDisposable
 {
     private TaskbarIcon? _tray;
     private string _trayState = "";
@@ -25,6 +25,8 @@ public partial class App : Application
         Supervisor.StartOrAttach();
         _client = new EngineClient(Supervisor.Token);
         Hud = new HudWindow();
+        Hud.ShowIdleDot = true;
+        Hud.ShowState("idle");
         Hud.DismissRequested = () =>
         {
             if (_client is not null)
@@ -127,23 +129,19 @@ public partial class App : Application
     {
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(frame);
-            var state = doc.RootElement.TryGetProperty("state", out var stateValue)
-                ? stateValue.GetString() ?? "hidden"
-                : "hidden";
-            var label = doc.RootElement.TryGetProperty("label", out var labelValue) ? labelValue.GetString() ?? "" : "";
-            var you = doc.RootElement.TryGetProperty("you", out var youValue) ? youValue.GetString() ?? "" : "";
-            var kuro = doc.RootElement.TryGetProperty("kuro", out var kuroValue) ? kuroValue.GetString() ?? "" : "";
-            if (doc.RootElement.TryGetProperty("levels", out var levels))
+            var parsed = System.Text.Json.JsonSerializer.Deserialize(frame, EngineJsonContext.Default.EventFrame);
+            if (parsed is null)
             {
-                var values = new double[levels.GetArrayLength()];
-                var index = 0;
-                foreach (var level in levels.EnumerateArray())
-                {
-                    values[index++] = level.GetDouble();
-                }
+                return;
+            }
 
-                Hud.SetLevels(values);
+            var state = parsed.State ?? "hidden";
+            var label = parsed.Label ?? "";
+            var you = parsed.You ?? "";
+            var kuro = parsed.Kuro ?? "";
+            if (parsed.Levels is { Length: > 0 } levels)
+            {
+                Hud.SetLevels(levels);
             }
 
             ConversationLog.Observe(you, kuro);
@@ -227,7 +225,18 @@ public partial class App : Application
         }
 
         _events?.Cancel();
-        _tray?.Dispose();
+        Dispose();
         Exit();
+    }
+
+    public void Dispose()
+    {
+        _events?.Dispose();
+        _events = null;
+        _tray?.Dispose();
+        _tray = null;
+        _client?.Dispose();
+        _client = null;
+        GC.SuppressFinalize(this);
     }
 }

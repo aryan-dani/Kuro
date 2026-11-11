@@ -22,8 +22,8 @@ public static class DesignTokens
     public static double WorkAreaGap { get; set; } = 24;
     public static int ResultHoldMs { get; set; } = 1500;
 
-    public static double RadiusRow { get; } = 0;
-    public static double RadiusCard { get; } = 0;
+    public static double RadiusRow => 0;
+    public static double RadiusCard => 0;
     public static double TitleSize { get; } = 28;
     public static double SectionSize { get; } = 15;
     public static double BodySize { get; } = 14;

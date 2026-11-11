@@ -40,7 +40,7 @@ public static class ConversationLog
     public static void Observe(string you, string kuro)
     {
         EnsureLoaded();
-        var at = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss");
+        var at = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
         if (!Buffer.Observe(you, kuro, at))
         {
             return;
@@ -69,7 +69,7 @@ public static class ConversationLog
         Changed?.Invoke();
     }
 
-    private static IEnumerable<Turn> Read()
+    private static List<Turn> Read()
     {
         try
         {
