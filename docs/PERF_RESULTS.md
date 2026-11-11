@@ -52,3 +52,33 @@ Release `kuro-engine.exe` from `kuro-rs/target/release`.
 
 Whisper transcription uses the local faster-whisper small.en weights through one persistent worker. Piper speech uses `piper.exe` and `bench/models/piper/en_US-lessac-medium.onnx`. `pyttsx3` uses WinRT `SpeechSynthesizer`. A spoken "hello" WAV came back from Whisper as a real transcript in the `kuro-stt` test (8.3 s, including model load).
 
+## Pre-native-tools (12 Nov 2026)
+
+Python spawn / import tax measured from the repo venv before the port. Spoken paths still used the Python sidecars at this point.
+
+| Path | ms | Spoken / note |
+| --- | ---: | --- |
+| Cold `tools.meet` import | 903 | interpreter + google auth imports |
+| Cold `tools.wa_link` import | 590 | neonize import path |
+| Cold `tinytuya` import | 1242 | plug fallback tax |
+| Chat `who are you` via `/say` | 8 | `Kuro. Local assistant. Phrases first, model last.` |
+| Plug via `/say` (engine missing TUYA env) | 225 | `Smart plug credentials are missing in .env.` |
+| Meet via `/say` while Python sidecar ran | blocked API | hung the current-thread HTTP loop on neonize/Edge |
+
+The 10x bar for this port is that cold Python tax, not Google/Edge/WhatsApp wall clock.
+
+## Post-native-tools (12 Nov 2026)
+
+In-process Meet, WhatsApp (neonize DLL), and Tuya framing. No `python.exe` tool children.
+
+| Path | ms | Spoken / note |
+| --- | ---: | --- |
+| Chat `who are you` | 4 | same spoken line |
+| Desk on | 2005 | `Desk on.` (native TCP; credentials loaded from `.env`) |
+| Desk off | 2012 | `Desk off.` |
+| `Send the Google Meet link to Mom` | 4826 | `Sent the Meet link to Mom.` |
+| Immediate second Meet | 208 | `I'm already opening a Meet.` (busy + 45s cooldown) |
+| `python.exe` tool children during Meet | 0 | confirmed via process list |
+
+Python import tax removed from the tool path (903 / 590 / 1242 ms cold imports no longer run). Meet wall clock stays network-bound (~5 s here) and is no longer a new interpreter per call.
+
