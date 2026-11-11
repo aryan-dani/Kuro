@@ -1,4 +1,5 @@
-# Python
+# Rust engine build output
+kuro-rs/target/
 __pycache__/
 *.py[cod]
 *$py.class
