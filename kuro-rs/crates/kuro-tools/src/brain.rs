@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-pub const SYSTEM_PROMPT: &str = "You are Kuro, a witty, dry-humored local Windows assistant. Keep replies short.";
+pub const SYSTEM_PROMPT: &str = "You are Kuro, a local Windows voice assistant. Answer in one or two short spoken sentences. No lists, no numbered steps, no stage directions, no asterisks, and no how-to manuals. If a desk, Meet, WhatsApp, inbox, music, or workflow tool should handle it, say so briefly instead of inventing steps.";
 
 const WAIT: &str = "Neural engine is off. Please wait while I start it.";
 
@@ -50,8 +50,44 @@ pub fn lazy_start_line(up: bool) -> Option<&'static str> {
     if up { None } else { Some(WAIT) }
 }
 
+/// Flatten chatty model text into one spoken line for Piper.
 pub fn speakable_line(raw: &str) -> String {
-    raw.trim().to_string()
+    let mut out = String::new();
+    for line in raw.lines() {
+        let mut line = line.trim().to_string();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('*') && line.ends_with('*') && line.len() > 1 {
+            continue;
+        }
+        while line.starts_with(['*', '-', '•']) {
+            line = line[1..].trim_start().to_string();
+        }
+        if let Some(rest) = line.strip_prefix(|c: char| c.is_ascii_digit()) {
+            let rest = rest.trim_start_matches(['.', ')', ':']).trim_start();
+            if !rest.is_empty() {
+                line = rest.to_string();
+            }
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&line);
+    }
+    let collapsed = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    let chars: Vec<char> = collapsed.chars().collect();
+    if chars.len() <= 220 {
+        return collapsed;
+    }
+    let mut cut = 220;
+    while cut > 0 && !chars[cut - 1].is_whitespace() {
+        cut -= 1;
+    }
+    if cut < 80 {
+        cut = 220;
+    }
+    format!("{}…", chars[..cut].iter().collect::<String>().trim_end())
 }
 
 pub fn ollama_chat_url() -> String {
