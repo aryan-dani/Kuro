@@ -77,3 +77,46 @@ pub fn try_singleton(lock_path: &Path) -> bool {
 pub fn release_singleton(lock_path: &Path) {
     let _ = fs::remove_file(lock_path);
 }
+
+/// Load selected keys from a `.env` file into the process without overwriting existing values.
+/// Never logs secret values.
+pub fn load_env_file(path: &Path, keys: &[&str]) {
+    let Ok(text) = fs::read_to_string(path) else {
+        return;
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((raw_key, raw_val)) = line.split_once('=') else {
+            continue;
+        };
+        let key = raw_key.trim();
+        if !keys.contains(&key) {
+            continue;
+        }
+        if std::env::var_os(key).is_some_and(|v| !v.is_empty()) {
+            continue;
+        }
+        let mut val = raw_val.trim().to_string();
+        if (val.starts_with('"') && val.ends_with('"')) || (val.starts_with('\'') && val.ends_with('\'')) {
+            val = val[1..val.len().saturating_sub(1)].to_string();
+        }
+        if !val.is_empty() {
+            // Safety: process-local env for this engine only.
+            unsafe { std::env::set_var(key, val) };
+        }
+    }
+}
+
+/// Repo root for tool Python (KURO_ROOT, else climb from CARGO_MANIFEST when building tools).
+pub fn repo_root_hint() -> PathBuf {
+    if let Ok(root) = std::env::var("KURO_ROOT") {
+        let path = PathBuf::from(root.trim());
+        if path.is_dir() {
+            return path;
+        }
+    }
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}

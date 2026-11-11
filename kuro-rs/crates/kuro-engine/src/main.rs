@@ -63,6 +63,16 @@ fn ollama_up() -> bool {
 
 fn main() {
     let gate_ci = gate_ci_mode();
+    let repo = kuro_core::repo_root_hint();
+    kuro_core::load_env_file(
+        &repo.join(".env"),
+        &["KURO_N8N_BASE_URL", "KURO_N8N_TOKEN", "OLLAMA_MODEL", "KURO_PYTHON"],
+    );
+    if std::env::var_os("KURO_N8N_BASE_URL").is_none_or(|v| v.is_empty()) {
+        unsafe {
+            std::env::set_var("KURO_N8N_BASE_URL", "http://100.78.60.50:5678/webhook");
+        }
+    }
     let paths = kuro_core::KuroPaths::from_env();
     let _ = std::fs::create_dir_all(&paths.root);
     kuro_core::append_rotating_log(&paths.log(), "kuro-engine start", 1_000_000);
