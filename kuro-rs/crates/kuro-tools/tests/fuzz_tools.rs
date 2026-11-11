@@ -16,6 +16,8 @@ fn fuzz_args() -> Vec<Value> {
 
 #[test]
 fn every_tool_survives_malformed_input() {
+    // Stub execution so fuzz never hits LAN / Google / WhatsApp / RSS.
+    kuro_tools::set_executor(Some(Box::new(|name, _args| format!("fuzz:{name}"))));
     for name in registered_tool_names() {
         for args in fuzz_args() {
             let out = execute_tool(name, &args);
@@ -25,4 +27,5 @@ fn every_tool_survives_malformed_input() {
         let unknown = execute_tool(&bad_name, &json!({}));
         assert!(!unknown.trim().is_empty());
     }
+    kuro_tools::set_executor(None);
 }

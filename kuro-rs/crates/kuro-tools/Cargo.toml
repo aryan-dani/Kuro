@@ -21,6 +21,7 @@ sha2 = { workspace = true }
 aes-gcm = { workspace = true }
 png = { workspace = true }
 windows-sys = { workspace = true }
+libloading = { workspace = true }
 
 [dev-dependencies]
 rusqlite = { workspace = true }

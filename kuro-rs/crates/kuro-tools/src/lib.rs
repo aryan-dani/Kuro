@@ -13,6 +13,7 @@ pub mod n8n;
 pub mod plug;
 pub mod screen;
 pub mod tuya;
+pub mod wa_neonize;
 pub mod whatsapp;
 
 type ToolHook = Box<dyn Fn(&str, &Value) -> String>;

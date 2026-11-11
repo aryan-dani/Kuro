@@ -311,7 +311,70 @@ pub fn match_phrase(text: &str) -> Option<HashMap<String, String>> {
     Some(out)
 }
 
-/// Phrase and contact resolution stay in-process. The neonize send is a one-shot process.
+/// Resolve body text for a send. Clipboard / browser URL stay local Win32 reads.
+fn message_for(source: &str, text: &str) -> Result<String, String> {
+    let trimmed = text.trim();
+    if !trimmed.is_empty() {
+        return Ok(trimmed.to_string());
+    }
+    match source {
+        "text" => Err("There is nothing to send.".into()),
+        "clipboard" => {
+            let clip = read_clipboard_text();
+            if clip.trim().is_empty() {
+                Err("The clipboard is empty. Copy text or an image first.".into())
+            } else {
+                Ok(clip)
+            }
+        }
+        "browser_url" => Err("I could not copy a link from the browser.".into()),
+        _ => Err("I don't know how to send that.".into()),
+    }
+}
+
+fn read_clipboard_text() -> String {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::HANDLE;
+        use windows_sys::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+        use windows_sys::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
+        const CF_UNICODETEXT: u32 = 13;
+        unsafe {
+            if OpenClipboard(std::ptr::null_mut()) == 0 {
+                return String::new();
+            }
+            let handle: HANDLE = GetClipboardData(CF_UNICODETEXT);
+            if handle.is_null() {
+                CloseClipboard();
+                return String::new();
+            }
+            let ptr = GlobalLock(handle) as *const u16;
+            if ptr.is_null() {
+                CloseClipboard();
+                return String::new();
+            }
+            let bytes = GlobalSize(handle);
+            let units = (bytes as usize) / 2;
+            let slice = std::slice::from_raw_parts(ptr, units);
+            let end = slice.iter().position(|&c| c == 0).unwrap_or(slice.len());
+            let text = String::from_utf16_lossy(&slice[..end]);
+            GlobalUnlock(handle);
+            CloseClipboard();
+            text
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        String::new()
+    }
+}
+
+/// In-process WhatsApp text send (neonize Go bridge DLL).
+pub fn deliver_text(digits: &str, text: &str) -> Result<(), String> {
+    crate::wa_neonize::deliver_text(digits, text)
+}
+
+/// Phrase and contact resolution stay in-process; send uses the neonize DLL.
 pub fn run(arguments: &Value) -> String {
     let contact = arguments.get("contact").and_then(|v| v.as_str()).unwrap_or("").trim();
     let source = arguments.get("source").and_then(|v| v.as_str()).unwrap_or("").trim().to_ascii_lowercase();
@@ -323,46 +386,12 @@ pub fn run(arguments: &Value) -> String {
         return "I don't know who to message.".into();
     };
     let text = arguments.get("text").and_then(|v| v.as_str()).unwrap_or("");
-    match spawn_neonize(&digits, &source, text) {
+    let body = match message_for(&source, text) {
+        Ok(body) => body,
+        Err(err) => return err,
+    };
+    match deliver_text(&digits, &body) {
         Ok(()) => format!("Success: Sent that to {}.", spoken_recipient(&name)),
         Err(err) => err,
     }
-}
-
-fn spawn_neonize(digits: &str, source: &str, text: &str) -> Result<(), String> {
-    let python = std::env::var("KURO_PYTHON").unwrap_or_else(|_| "python".into());
-    let script = r#"
-import json, os, sys
-payload = json.loads(sys.stdin.read())
-try:
-    from tools.whatsapp import deliver
-except Exception as exc:
-    print("missing", file=sys.stderr)
-    sys.exit(3)
-result = deliver(payload["digits"], text=payload.get("text") or "", image=None)
-print(result)
-sys.exit(0 if result == "ok" else 2)
-"#;
-    let payload = serde_json::json!({
-        "digits": digits,
-        "source": source,
-        "text": text,
-    })
-    .to_string();
-    let mut child = std::process::Command::new(&python)
-        .arg("-c")
-        .arg(script)
-        .env("PYTHONPATH", std::env::var("KURO_ROOT").unwrap_or_else(|_| ".".into()))
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-    {
-        use std::io::Write;
-        let mut stdin = child.stdin.take().ok_or_else(|| "I couldn't send that WhatsApp.".to_string())?;
-        stdin.write_all(payload.as_bytes()).map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-    }
-    let output = child.wait_with_output().map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-    if output.status.success() { Ok(()) } else { Err("I couldn't send that WhatsApp.".into()) }
 }
