@@ -49,6 +49,10 @@ fn decode_wav(bytes: &[u8]) -> Option<(u32, Vec<f32>)> {
 
 #[test]
 fn spoken_wav_returns_a_real_transcript() {
+    if kuro_stt::ggml_path().is_none() {
+        eprintln!("skip spoken_wav_returns_a_real_transcript: Whisper GGML model not present");
+        return;
+    }
     let (rate, pcm) = speak_wav("hello").expect("windows speech");
     assert!(pcm.len() > 1000, "speech clip too short");
     let text = transcribe_pcm(&pcm, rate, false, &initial_prompt(&[], &[])).expect("whisper");

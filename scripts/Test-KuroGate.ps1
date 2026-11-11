@@ -92,8 +92,15 @@ Invoke-Stage "4 cargo test" {
     $ErrorActionPreference = "Continue"
     try {
         Push-Location $Root
-        cargo test --manifest-path $Manifest --workspace -- --nocapture 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "cargo test failed" }
+        $log = Join-Path $env:TEMP ("kuro-gate-cargo-test-{0}.log" -f [guid]::NewGuid().ToString("N"))
+        cargo test --manifest-path $Manifest --workspace -- --nocapture *> $log
+        $code = $LASTEXITCODE
+        if ($code -ne 0) {
+            Write-Host "----- cargo test tail -----"
+            Get-Content -LiteralPath $log -Tail 80 -ErrorAction SilentlyContinue
+            Write-Host "----- end cargo test tail -----"
+            throw "cargo test failed"
+        }
     }
     finally {
         Pop-Location

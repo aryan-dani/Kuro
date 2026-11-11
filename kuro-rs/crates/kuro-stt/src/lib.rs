@@ -126,6 +126,8 @@ pub fn ready_for_heavy(on_ac: bool, legion: Option<&Value>, now_secs: f64) -> bo
     status.get("ac_fit").and_then(|v| v.as_i64()) != Some(0)
 }
 
+pub use worker::ggml_path;
+
 /// Transcribe mono f32 audio with in-process whisper-rs (GGML).
 pub fn transcribe_pcm(pcm: &[f32], sample_rate: u32, partial: bool, prompt: &str) -> Result<String, String> {
     let backend = select_backend(&std::env::var("KURO_STT_BACKEND").unwrap_or_else(|_| "auto".into()), query_on_ac());
