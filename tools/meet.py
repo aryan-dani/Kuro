@@ -318,7 +318,8 @@ def _open_edge(link: str) -> bool:
         logger.error("Meet window did not appear")
         return False
     _focus_hwnd(hwnd)
-    _click_join(hwnd, 20.0)
+    # Keep Join short so voice turns return quickly after the link is sent.
+    _click_join(hwnd, 8.0)
     _focus_hwnd(hwnd)
     return True
 
@@ -343,17 +344,28 @@ def run(arguments: dict[str, Any] | None) -> str:
         if not link:
             return "I couldn't create the Google Meet."
         _copy_link(link)
+
+        # Send the link before Edge/Join UI work. Opening Meet can take many
+        # seconds; Mom should not wait on the Join button click.
+        sent = "ok"
+        shown = ""
+        if contact:
+            from tools.wa_link import deliver
+            from tools.whatsapp import spoken_recipient
+
+            sent = deliver(digits, text=link)
+            shown = spoken_recipient(name)
+            if sent != "ok":
+                # Still try to open Meet so the call is usable locally.
+                _open_edge(link)
+                return sent
+
         if not _open_edge(link):
+            if contact and sent == "ok":
+                return f"Success: Sent the Meet link to {shown}, but Edge did not open."
             return "The Meet was created, but Edge did not open."
         if not contact:
             return "Success: The Meet is open."
-        from tools.wa_link import deliver
-        from tools.whatsapp import spoken_recipient
-
-        sent = deliver(digits, text=link)
-        if sent != "ok":
-            return sent
-        shown = spoken_recipient(name)
         logger.info("Meet link sent contact=%s", name)
         return f"Success: Sent the Meet link to {shown}."
     except Exception:

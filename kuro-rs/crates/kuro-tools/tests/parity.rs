@@ -317,6 +317,11 @@ fn meet_phrases_and_guards() {
     }
     assert!(kuro_tools::meet::match_phrase("desk off").is_none());
     assert!(kuro_tools::meet::match_phrase("send the link to mom on whatsapp").is_none());
+    assert!(kuro_tools::meet::match_phrase(
+        "Now you should be better off right. Comparatively at least. Let's see if you understand my query. And if you do send a Google Meet link to Mom."
+    )
+    .is_none());
+    assert!(kuro_tools::meet::match_phrase("send the meeting notes to mom").is_none());
 
     whatsapp::set_address_book(Some(HashMap::from([("siya".into(), "910000000001".into())])));
     kuro_tools::meet::set_signed_in(Some(true));

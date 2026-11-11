@@ -1,7 +1,8 @@
 use std::cell::RefCell;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use fancy_regex::Regex;
 use serde_json::Value;
@@ -10,13 +11,42 @@ thread_local! {
     static CREDS: RefCell<Option<bool>> = const { RefCell::new(None) };
 }
 
-/// `Some(false)` forces "not signed in" without reading a file. `None` uses live credentials / Python.
+static MEET_BUSY: AtomicBool = AtomicBool::new(false);
+/// Unix seconds until a new Meet may start (cooldown after a claim).
+static MEET_COOLDOWN_UNTIL: AtomicU64 = AtomicU64::new(0);
+const MEET_COOLDOWN_SECS: u64 = 45;
+
+/// `Some(false)` forces "not signed in" without reading a file. `None` uses live credentials.
 pub fn set_signed_in(value: Option<bool>) {
     CREDS.with(|s| *s.borrow_mut() = value);
 }
 
 pub fn edge_args(edge: &str, link: &str) -> Vec<String> {
     vec![edge.to_string(), format!("--app={link}"), "--start-maximized".into()]
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+fn claim_meet() -> bool {
+    if MEET_BUSY.swap(true, Ordering::SeqCst) {
+        return false;
+    }
+    let now = unix_now();
+    let until = MEET_COOLDOWN_UNTIL.load(Ordering::SeqCst);
+    if now < until {
+        MEET_BUSY.store(false, Ordering::SeqCst);
+        return false;
+    }
+    true
+}
+
+fn release_meet(apply_cooldown: bool) {
+    if apply_cooldown {
+        MEET_COOLDOWN_UNTIL.store(unix_now().saturating_add(MEET_COOLDOWN_SECS), Ordering::SeqCst);
+    }
+    MEET_BUSY.store(false, Ordering::SeqCst);
 }
 
 fn normalize(text: &str) -> String {
@@ -41,7 +71,8 @@ fn clean_name(name: &str) -> String {
 }
 
 fn has_meet_word(body: &str) -> bool {
-    body.split_whitespace().any(|w| matches!(w, "meet" | "mate" | "meat" | "mete" | "meeting"))
+    // Intentionally omit "meeting" — it matches "meeting notes" and other chat.
+    body.split_whitespace().any(|w| matches!(w, "meet" | "mate" | "meat" | "mete"))
 }
 
 fn extract_send_to(body: &str) -> Option<String> {
@@ -60,8 +91,29 @@ fn extract_send_to(body: &str) -> Option<String> {
     None
 }
 
+/// Long STT lines that merely mention Meet must not open a call.
+fn utterance_is_meet_shaped(body: &str) -> bool {
+    let words: Vec<&str> = body.split_whitespace().collect();
+    if words.len() <= 14 {
+        return true;
+    }
+    let head = words[..8.min(words.len())].join(" ");
+    head.starts_with("make ")
+        || head.starts_with("create ")
+        || head.starts_with("start ")
+        || head.starts_with("open ")
+        || head.starts_with("send ")
+        || head.contains("google meet")
+        || head.contains("google mate")
+        || head.contains("google meat")
+        || head.contains("google mete")
+}
+
 pub fn match_phrase(text: &str) -> Option<std::collections::HashMap<String, String>> {
     let body = normalize(text);
+    if !utterance_is_meet_shaped(&body) {
+        return None;
+    }
     let re = Regex::new(
         r"^(?:(?:make|create|start)\s+(?:a\s+|an\s+)?(?:google\s+)?(?:meet|mate|meat|mete)(?:\s+and\s+send(?:\s+(?:the|this|a))?(?:\s+link)?(?:\s+it)?\s+to\s+(?P<to>.+)|\s+for\s+(?P<forname>.+))?|send\s+(?:me\s+)?(?:the\s+|a\s+|my\s+)?(?:google\s+)?(?:meet|mate|meat|mete)(?:\s+link)?\s+to\s+(?P<sendto>.+))$",
     )
@@ -77,7 +129,6 @@ pub fn match_phrase(text: &str) -> Option<std::collections::HashMap<String, Stri
         out.insert("contact".into(), clean_name(raw));
         return Some(out);
     }
-    // Looser voice lines: "google meet link for mom", "send meet to mom on whatsapp", etc.
     if !has_meet_word(&body) {
         return None;
     }
@@ -96,83 +147,108 @@ pub fn match_phrase(text: &str) -> Option<std::collections::HashMap<String, Stri
     Some(out)
 }
 
-fn repo_root() -> PathBuf {
-    if let Ok(root) = std::env::var("KURO_ROOT") {
-        let path = PathBuf::from(root.trim());
-        if path.is_dir() {
-            return path;
-        }
+fn edge_path() -> Option<PathBuf> {
+    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    let program = std::env::var_os("ProgramFiles(x86)").or_else(|| std::env::var_os("ProgramFiles")).map(PathBuf::from);
+    let mut candidates = Vec::new();
+    if let Some(p) = program {
+        candidates.push(p.join(r"Microsoft\Edge\Application\msedge.exe"));
     }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..")
+    if let Some(p) = local {
+        candidates.push(p.join(r"Microsoft\Edge\Application\msedge.exe"));
+    }
+    candidates.into_iter().find(|p| p.is_file())
 }
 
-fn python_exe(root: &Path) -> PathBuf {
-    if let Ok(path) = std::env::var("KURO_PYTHON") {
-        let path = PathBuf::from(path.trim());
-        if path.is_file() {
-            return path;
-        }
-    }
-    let venv = root.join(".venv").join("Scripts").join("python.exe");
-    if venv.is_file() {
-        return venv;
-    }
-    PathBuf::from("python")
+fn open_edge(link: &str) -> bool {
+    let Some(edge) = edge_path() else {
+        return false;
+    };
+    let args = edge_args(edge.to_string_lossy().as_ref(), link);
+    Command::new(&args[0]).args(&args[1..]).spawn().is_ok()
 }
 
-fn spawn_meet_py(contact: &str) -> String {
-    let root = repo_root();
-    let python = python_exe(&root);
-    let script = r#"
-import json, sys
-payload = json.loads(sys.stdin.read())
-from tools.meet import run
-print(run(payload))
-"#;
-    let payload = serde_json::json!({ "contact": contact }).to_string();
-    let mut child = match Command::new(&python)
-        .arg("-c")
-        .arg(script)
-        .current_dir(&root)
-        .env("PYTHONPATH", &root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(_) => return "I couldn't create that Google Meet.".into(),
-    };
-    if let Some(mut stdin) = child.stdin.take()
-        && stdin.write_all(payload.as_bytes()).is_err()
-    {
-        return "I couldn't create that Google Meet.".into();
+fn access_token(path: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let data: Value = serde_json::from_str(&text).ok()?;
+    if !refresh_if_needed(path, &data) {
+        // Still try whatever token is on disk.
     }
-    let output = match child.wait_with_output() {
-        Ok(output) => output,
-        Err(_) => return "I couldn't create that Google Meet.".into(),
-    };
-    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if text.is_empty() { "I couldn't create that Google Meet.".into() } else { text }
+    let text = std::fs::read_to_string(path).ok()?;
+    let data: Value = serde_json::from_str(&text).ok()?;
+    let token = data.get("token").or_else(|| data.get("access_token")).and_then(|v| v.as_str()).unwrap_or("").trim();
+    if token.is_empty() { None } else { Some(token.to_string()) }
+}
+
+fn refresh_if_needed(path: &Path, data: &Value) -> bool {
+    let refresh = data.get("refresh_token").and_then(|v| v.as_str()).unwrap_or("");
+    if refresh.is_empty() || !token_expired(data) {
+        return true;
+    }
+    refresh_token(path, data, refresh)
 }
 
 pub fn run(arguments: &Value) -> String {
     let contact = arguments.get("contact").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let mut digits = String::new();
+    let mut shown = String::new();
     if !contact.is_empty() {
         let book = crate::whatsapp::address_book();
-        if crate::whatsapp::resolve_contact(&contact, &book).is_none() {
+        let Some((name, number)) = crate::whatsapp::resolve_contact(&contact, &book) else {
             return "I don't know that contact.".into();
-        }
+        };
+        digits = number;
+        shown = crate::whatsapp::spoken_recipient(&name);
     }
     match CREDS.with(|s| *s.borrow()) {
         Some(false) => return "Google Meet is not signed in.".into(),
         Some(true) => return "Success: The Meet is open.".into(),
         None => {}
     }
-    if !google_token_usable(&kuro_core::KuroPaths::from_env().google_token()) {
+    let token_path = kuro_core::KuroPaths::from_env().google_token();
+    if !google_token_usable(&token_path) {
         return "Google Meet is not signed in.".into();
     }
-    spawn_meet_py(&contact)
+    if !claim_meet() {
+        return "I'm already opening a Meet.".into();
+    }
+    let result = run_native(&token_path, &digits, &shown);
+    let cool = result.starts_with("Success:") || result.contains("Sent the Meet");
+    release_meet(cool);
+    result
+}
+
+fn run_native(token_path: &Path, digits: &str, shown: &str) -> String {
+    let Some(token) = access_token(token_path) else {
+        return "Google Meet is not signed in.".into();
+    };
+    let Some(link) = create_space(&token) else {
+        return "I couldn't create that Google Meet.".into();
+    };
+
+    // Link first so the contact is not waiting on Edge.
+    let sent_ok = if digits.is_empty() {
+        true
+    } else {
+        match crate::whatsapp::deliver_text(digits, &link) {
+            Ok(()) => true,
+            Err(err) => {
+                let _ = open_edge(&link);
+                return err;
+            }
+        }
+    };
+
+    if !open_edge(&link) {
+        if !digits.is_empty() && sent_ok {
+            return format!("Success: Sent the Meet link to {shown}, but Edge did not open.");
+        }
+        return "The Meet was created, but Edge did not open.".into();
+    }
+    if digits.is_empty() {
+        return "Success: The Meet is open.".into();
+    }
+    format!("Success: Sent the Meet link to {shown}.")
 }
 
 fn google_token_usable(path: &Path) -> bool {
@@ -182,7 +258,7 @@ fn google_token_usable(path: &Path) -> bool {
     let Ok(data) = serde_json::from_str::<Value>(&text) else {
         return false;
     };
-    let token = data.get("token").and_then(|v| v.as_str()).unwrap_or("");
+    let token = data.get("token").or_else(|| data.get("access_token")).and_then(|v| v.as_str()).unwrap_or("");
     let refresh = data.get("refresh_token").and_then(|v| v.as_str()).unwrap_or("");
     if token.is_empty() && refresh.is_empty() {
         return false;
@@ -197,13 +273,49 @@ fn token_expired(data: &Value) -> bool {
     let Some(expiry) = data.get("expiry").and_then(|v| v.as_str()) else {
         return false;
     };
+    // Google token.json uses RFC3339; compare lexicographically only for ISO-like stamps.
+    if expiry.contains('T') {
+        return chrono_rfc_expired(expiry);
+    }
     expiry.len() >= 10 && expiry < chrono_now().as_str()
 }
 
+fn chrono_rfc_expired(expiry: &str) -> bool {
+    // Prefer refresh when expiry string is in the past vs UTC now (ISO-8601 comparable).
+    expiry < chrono_iso_now().as_str()
+}
+
 fn chrono_now() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let secs = unix_now();
     format!("{secs}")
+}
+
+fn chrono_iso_now() -> String {
+    // Enough for string compare against Google's `2025-01-02T03:04:05Z` style expiry.
+    let secs = unix_now() as i64;
+    let days = secs.div_euclid(86400);
+    let rem = secs.rem_euclid(86400);
+    let hours = rem / 3600;
+    let mins = (rem % 3600) / 60;
+    let s = rem % 60;
+    // Civil date from Unix day (proleptic Gregorian).
+    let (y, m, d) = unix_day_to_ymd(days);
+    format!("{y:04}-{m:02}-{d:02}T{hours:02}:{mins:02}:{s:02}Z")
+}
+
+fn unix_day_to_ymd(days: i64) -> (i32, u32, u32) {
+    // Algorithm from civil_from_days (Howard Hinnant).
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 }.div_euclid(146_097);
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m as u32, d as u32)
 }
 
 fn refresh_token(path: &Path, data: &Value, refresh: &str) -> bool {
@@ -236,9 +348,14 @@ fn refresh_token(path: &Path, data: &Value, refresh: &str) -> bool {
         for (k, v) in obj {
             out.entry(k.clone()).or_insert(v.clone());
         }
+        // Google returns access_token; keep the authorized-user `token` field in sync.
+        if let Some(access) = out.get("access_token").cloned() {
+            out.insert("token".into(), access);
+        }
     }
     let _ = std::fs::write(path, serde_json::to_string_pretty(&fresh).unwrap_or_default());
     fresh.get("access_token").and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty())
+        || fresh.get("token").and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty())
 }
 
 fn urlencoding_min(raw: &str) -> String {
