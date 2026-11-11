@@ -155,15 +155,23 @@ _ptt_level_tick = 0
 _live_transcript = ""
 _cancel_speech = threading.Event()
 _early_home_fired = False
+_turn = 0
 BUSY_STALE_SECONDS = 20.0
+
+
+def _live(epoch: int) -> bool:
+    """True while this voice turn has not been dismissed or force-unblocked."""
+    return epoch == _turn
 
 
 def _force_unblock(reason: str = "reset") -> None:
     """Clear stuck busy/PTT state so the hotkey works again."""
     global is_processing, _ptt_active, _ptt_stream, _ptt_frames, _live_transcript, _early_home_fired
-    global _processing_started_at
+    global _processing_started_at, _turn, _followup
 
     logger.warning("Force unblock (%s)", reason)
+    _turn += 1
+    _followup = False
     try:
         import cancel
 
@@ -230,16 +238,34 @@ def _setup_logging() -> None:
     logger.info("Logging to %s", log_path)
 
 
-def _speak(text: str, *, fast: bool = False, on_audio_start=None) -> None:
+def _speak(text: str, *, fast: bool = False, on_audio_start=None, epoch: int | None = None) -> None:
     import tts
 
-    _cancel_speech.clear()
+    if epoch is not None:
+        if not _live(epoch):
+            logger.info("Speak skipped — turn %s dismissed", epoch)
+            return
+        try:
+            import cancel
+
+            if cancel.event.is_set():
+                logger.info("Speak skipped — cancel armed for turn %s", epoch)
+                return
+        except Exception:
+            pass
+        _cancel_speech.clear()
+    else:
+        # Hub / non-turn speech: do not fight a voice dismiss latch.
+        _cancel_speech.clear()
+
     # Serialize speech so overlapping calls can't double-play
     tts.speak(text, fast=fast, on_audio_start=on_audio_start)
 
 
-def _mark_speaking() -> None:
+def _mark_speaking(epoch: int | None = None) -> None:
     """Flip the HUD to Speaking only when audio is about to play."""
+    if epoch is not None and not _live(epoch):
+        return
     if tray_manager:
         tray_manager.set_state(KuroState.SPEAKING)
     if overlay_manager:
@@ -582,8 +608,13 @@ def _is_hub_desk_phrase(text: str) -> bool:
     )
 
 
-def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
+def _route_command(
+    user_prompt: str, epoch: int
+) -> tuple[str, bool, Callable | None, bool]:
     """Hub first for desk rituals. Meet, WhatsApp, workflows, and inbox stay on this laptop."""
+    if not _live(epoch):
+        return "", True, None, True
+
     # Anything phrases can answer stays on this laptop — never waits on hub or Ollama.
     local_first = phrases.try_handle(user_prompt)
     if local_first is not None:
@@ -598,6 +629,8 @@ def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
 
     if hub_client.configured():
         result = hub_client.command(user_prompt, early=False)
+        if not _live(epoch):
+            return "", True, None, True
         if result is None:
             if _is_music_only_phrase(user_prompt):
                 local = phrases.try_handle(user_prompt)
@@ -620,6 +653,9 @@ def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
             hub_client.apply_client_actions(result.get("client_actions") or [])
             return result.get("reply") or "", False, None, False
 
+    if not _live(epoch):
+        return "", True, None, True
+
     # Local inbox + any remaining local phrases, then LLM as last resort only.
     handled = phrases.try_handle(user_prompt)
     if handled is not None:
@@ -638,13 +674,18 @@ def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
             True,
         )
 
-    return _llm_last_resort(user_prompt)
+    return _llm_last_resort(user_prompt, epoch)
 
 
-def _llm_last_resort(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
+def _llm_last_resort(
+    user_prompt: str, epoch: int
+) -> tuple[str, bool, Callable | None, bool]:
     """Only path that may touch Ollama. Speaks a wait line, starts serve, then answers."""
     import brain
     import ollama_runtime
+
+    if not _live(epoch):
+        return "", True, None, True
 
     if overlay_manager:
         overlay_manager.set_state(OverlayState.THINKING, subtitle="Thinking...")
@@ -655,14 +696,19 @@ def _llm_last_resort(user_prompt: str) -> tuple[str, bool, Callable | None, bool
     prompt = user_prompt
 
     def _start_then_answer() -> None:
+        if not _live(epoch):
+            return
         if overlay_manager:
             overlay_manager.set_state(OverlayState.THINKING, subtitle="Starting neural engine")
         ok = ollama_runtime.ensure_ready(timeout=45.0)
+        if not _live(epoch):
+            return
         if not ok:
             _speak(
                 "I could not start the neural engine.",
                 fast=True,
-                on_audio_start=_mark_speaking,
+                on_audio_start=lambda: _mark_speaking(epoch),
+                epoch=epoch,
             )
             return
         if overlay_manager:
@@ -672,7 +718,9 @@ def _llm_last_resort(user_prompt: str) -> tuple[str, bool, Callable | None, bool
         except Exception:
             logger.exception("LLM after Ollama start failed")
             answer = "The neural engine started, but the reply failed."
-        _speak(answer, on_audio_start=_mark_speaking)
+        if not _live(epoch):
+            return
+        _speak(answer, on_audio_start=lambda: _mark_speaking(epoch), epoch=epoch)
 
     return (
         "Neural engine is off. Please wait while I start it.",
@@ -682,19 +730,29 @@ def _llm_last_resort(user_prompt: str) -> tuple[str, bool, Callable | None, bool
     )
 
 
-def _follow_up_listen() -> None:
+def _follow_up_listen(epoch: int) -> None:
     """After a question, keep the mic open so the answer is the next turn."""
     global _followup
+    if not _live(epoch):
+        return
     time.sleep(0.4)
+    if not _live(epoch):
+        return
     _followup = True
     try:
+        if not _live(epoch):
+            return
         start_push_to_talk()
         if not _ptt_active:
+            return
+        if not _live(epoch):
             return
         if overlay_manager:
             overlay_manager.set_open_mic(True)
             overlay_manager.set_state(OverlayState.LISTENING, subtitle="Go on")
         time.sleep(7.0)
+        if not _live(epoch):
+            return
         if _ptt_active:
             stop_push_to_talk()
     finally:
@@ -713,21 +771,35 @@ def process_audio_file(audio_file: str) -> None:
     global is_processing, _live_transcript, _early_home_fired, _processing_started_at
     asked = False
     user_prompt = ""
+    epoch = _turn
     with process_lock:
         if is_processing:
             logger.info("Already processing — drop clip.")
             return
         is_processing = True
         _processing_started_at = time.time()
+        epoch = _turn
 
     try:
+        try:
+            import cancel
+
+            cancel.event.clear()
+        except Exception:
+            pass
+        if not _live(epoch):
+            logger.info("Turn dismissed before start — drop clip.")
+            return
+
         # If daddy's home already early-fired while holding, we're done
         if _early_home_fired:
             logger.info("Daddy's home already handled early — skipping full pipeline")
-            if overlay_manager:
+            if _live(epoch) and overlay_manager:
                 overlay_manager.set_state(OverlayState.DONE, subtitle="Done", hold_ms=1200)
             return
 
+        if not _live(epoch):
+            return
         if tray_manager:
             tray_manager.set_state(KuroState.THINKING)
         if overlay_manager:
@@ -738,6 +810,9 @@ def process_audio_file(audio_file: str) -> None:
         logger.info("Transcribing full clip...")
         final = (_transcribe(audio_file, partial=False) or "").strip()
         timing.mark("stt_done")
+        if not _live(epoch):
+            logger.info("Turn dismissed after STT — drop result.")
+            return
         user_prompt = final
         if not user_prompt and live:
             logger.info("Final STT empty — falling back to live: %r", live)
@@ -755,17 +830,22 @@ def process_audio_file(audio_file: str) -> None:
 
         if not user_prompt or not user_prompt.strip():
             logger.info("No audible speech detected.")
-            if overlay_manager:
+            if _live(epoch) and overlay_manager:
                 overlay_manager.set_transcript(you="(silence)", kuro="")
                 overlay_manager.set_state(OverlayState.ERROR, subtitle="Heard nothing", hold_ms=2500)
             return
 
         logger.info('You: "%s"', user_prompt)
+        if not _live(epoch):
+            return
         if overlay_manager:
             overlay_manager.set_transcript(you=user_prompt)
 
-        reply, skip_tts, after_speak, force_fast = _route_command(user_prompt)
+        reply, skip_tts, after_speak, force_fast = _route_command(user_prompt, epoch)
         timing.mark("route_done")
+        if not _live(epoch):
+            logger.info("Turn dismissed after route — no speak.")
+            return
 
         logger.info('Kuro: "%s"', reply)
 
@@ -774,14 +854,21 @@ def process_audio_file(audio_file: str) -> None:
 
         if not skip_tts:
             # Stay on Thinking while XTTS synthesizes; Speaking starts with first audio.
-            _speak(reply, fast=force_fast, on_audio_start=_mark_speaking)
-        if after_speak:
+            _speak(
+                reply,
+                fast=force_fast,
+                on_audio_start=lambda: _mark_speaking(epoch),
+                epoch=epoch,
+            )
+        if after_speak and _live(epoch):
             try:
                 after_speak()
             except Exception:
                 logger.exception("after_speak failed")
 
-        asked = reply.strip().endswith("?")
+        if not _live(epoch):
+            return
+        asked = bool(reply) and reply.strip().endswith("?")
         if overlay_manager:
             if asked:
                 overlay_manager.set_state(OverlayState.LISTENING, subtitle="Go on")
@@ -790,12 +877,13 @@ def process_audio_file(audio_file: str) -> None:
 
     except Exception as e:
         logger.exception("Error during interaction: %s", e)
-        if overlay_manager:
+        if _live(epoch) and overlay_manager:
             overlay_manager.set_state(OverlayState.ERROR, subtitle=str(e)[:80], hold_ms=3000)
-        try:
-            _speak("Pardon me, sir.", fast=False)
-        except Exception:
-            pass
+        if _live(epoch):
+            try:
+                _speak("Pardon me, sir.", fast=False, epoch=epoch)
+            except Exception:
+                pass
     finally:
         _early_home_fired = False
         if tray_manager:
@@ -805,8 +893,12 @@ def process_audio_file(audio_file: str) -> None:
             _processing_started_at = 0.0
         timing.mark("idle")
         timing.finish()
-        if asked and not _followup:
-            threading.Thread(target=_follow_up_listen, daemon=True, name="KuroFollow").start()
+        if asked and not _followup and _live(epoch):
+            threading.Thread(
+                target=lambda: _follow_up_listen(epoch),
+                daemon=True,
+                name="KuroFollow",
+            ).start()
         elif _keep_music_stopped(user_prompt):
             media_hold.forget()
         else:
