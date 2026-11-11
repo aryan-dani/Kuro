@@ -1,12 +1,14 @@
+using System.IO.Pipes;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 
 namespace KuroShell;
 
-public sealed class EngineClient
+public sealed class EngineClient : IDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(4) };
+    public const string PipeName = "KuroEngine";
 
     public EngineClient(string token, int port = 8765)
     {
@@ -44,6 +46,55 @@ public sealed class EngineClient
 
     public async Task ListenAsync(Action<string> onFrame, CancellationToken cancel)
     {
+        try
+        {
+            await ListenPipeAsync(onFrame, cancel);
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Named pipe unavailable; fall through to WebSocket loopback.
+        }
+
+        await ListenWebSocketAsync(onFrame, cancel);
+    }
+
+    private async Task ListenPipeAsync(Action<string> onFrame, CancellationToken cancel)
+    {
+        using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        await pipe.ConnectAsync(750, cancel);
+        var auth = Encoding.UTF8.GetBytes($"AUTH {Token}\n");
+        await pipe.WriteAsync(auth, cancel);
+        await pipe.FlushAsync(cancel);
+
+        using var reader = new StreamReader(pipe, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+        var ack = await reader.ReadLineAsync(cancel);
+        if (!string.Equals(ack, "OK", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Named pipe auth failed.");
+        }
+
+        while (!cancel.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync(cancel);
+            if (line is null)
+            {
+                return;
+            }
+
+            if (line.Length > 0)
+            {
+                onFrame(line);
+            }
+        }
+    }
+
+    private async Task ListenWebSocketAsync(Action<string> onFrame, CancellationToken cancel)
+    {
         using var socket = new ClientWebSocket();
         socket.Options.SetRequestHeader("X-Kuro-Token", Token);
         var uri = new Uri($"ws://127.0.0.1:{Port}/events");
@@ -67,5 +118,11 @@ public sealed class EngineClient
 
             onFrame(built.ToString());
         }
+    }
+
+    public void Dispose()
+    {
+        _http.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

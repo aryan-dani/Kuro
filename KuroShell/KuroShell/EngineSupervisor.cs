@@ -124,6 +124,26 @@ public sealed class EngineSupervisor
         return sent;
     }
 
+    public static string? FindEngine(string repoRoot)
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string[] candidates =
+        [
+            Path.Combine(repoRoot, "kuro-rs", "target", "release", "kuro-engine.exe"),
+            Path.Combine(local, "Kuro", "kuro-engine.exe"),
+            Path.Combine(repoRoot, "kuro-rs", "target", "debug", "kuro-engine.exe"),
+        ];
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     private void Launch()
     {
         if (RepoRoot is null)
@@ -133,22 +153,66 @@ public sealed class EngineSupervisor
             return;
         }
 
-        var python = Path.Combine(RepoRoot, ".venv", "Scripts", "python.exe");
-        if (!File.Exists(python))
+        var legacy = string.Equals(Environment.GetEnvironmentVariable("KURO_LEGACY_PYTHON"), "1", StringComparison.Ordinal);
+        var engine = legacy ? null : FindEngine(RepoRoot);
+        ProcessStartInfo info;
+        if (engine is not null)
         {
-            python = "python";
+            info = new ProcessStartInfo
+            {
+                FileName = engine,
+                WorkingDirectory = RepoRoot,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            };
+        }
+        else
+        {
+            var python = Path.Combine(RepoRoot, ".venv", "Scripts", "python.exe");
+            if (!File.Exists(python))
+            {
+                python = "python";
+            }
+
+            info = new ProcessStartInfo
+            {
+                FileName = python,
+                Arguments = "run_kuro.py",
+                WorkingDirectory = RepoRoot,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            };
         }
 
-        var info = new ProcessStartInfo
-        {
-            FileName = python,
-            Arguments = "run_kuro.py",
-            WorkingDirectory = RepoRoot,
-            CreateNoWindow = true,
-            UseShellExecute = false,
-        };
         info.Environment["KURO_API"] = "on";
         info.Environment["KURO_HUD_SHOW_TEXT"] = "1";
+        info.Environment["KURO_TTS_PLAY"] = "1";
+        info.Environment["KURO_STT_BACKEND"] = "cpu";
+        if (RepoRoot is not null)
+        {
+            info.Environment["KURO_ROOT"] = RepoRoot;
+            var venvPython = Path.Combine(RepoRoot, ".venv", "Scripts", "python.exe");
+            if (File.Exists(venvPython))
+            {
+                info.Environment["KURO_PYTHON"] = venvPython;
+            }
+        }
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OLLAMA_MODEL")))
+        {
+            info.Environment["OLLAMA_MODEL"] = "qwen2.5:7b-instruct";
+        }
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("LIBCLANG_PATH")))
+        {
+            var portable = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "LLVM-portable",
+                "clang+llvm-18.1.8-x86_64-pc-windows-msvc",
+                "bin");
+            if (File.Exists(Path.Combine(portable, "libclang.dll")))
+            {
+                info.Environment["LIBCLANG_PATH"] = portable;
+            }
+        }
         try
         {
             _process = Process.Start(info);
