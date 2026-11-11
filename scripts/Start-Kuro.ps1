@@ -51,10 +51,13 @@ if (Test-Path -LiteralPath $DisableFlag) {
 function Get-KuroProcesses {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
-            ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
-            $_.CommandLine -and
-            ($_.CommandLine -match 'Kuro') -and
-            ($_.CommandLine -match '(run_kuro|main)\.py')
+            ($_.Name -eq "kuro-engine.exe") -or
+            (
+                ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
+                $_.CommandLine -and
+                ($_.CommandLine -match 'Kuro') -and
+                ($_.CommandLine -match '(run_kuro|main)\.py')
+            )
         }
 }
 
@@ -156,23 +159,37 @@ function Start-OllamaBackend {
 }
 
 try {
-    if (-not (Test-Path -LiteralPath $MainPy)) {
-        throw ("entrypoint not found at: {0}" -f $MainPy)
-    }
+    Start-OllamaBackend
 
-    $exe = $null
-    if ((-not $ShowWindow) -and (Test-Path -LiteralPath $Pythonw)) {
-        $exe = $Pythonw
+    $Engine = Join-Path $KuroRoot "kuro-rs\target\release\kuro-engine.exe"
+    if (-not (Test-Path -LiteralPath $Engine)) {
+        $Engine = Join-Path $env:LOCALAPPDATA "Kuro\kuro-engine.exe"
     }
-    elseif (Test-Path -LiteralPath $Python) {
-        $exe = $Python
+    $UsePython = ($env:KURO_LEGACY_PYTHON -eq "1") -or (-not (Test-Path -LiteralPath $Engine))
+    if ($UsePython) {
+        if (-not (Test-Path -LiteralPath $MainPy)) {
+            throw ("entrypoint not found at: {0}" -f $MainPy)
+        }
+        $exe = $null
+        if ((-not $ShowWindow) -and (Test-Path -LiteralPath $Pythonw)) {
+            $exe = $Pythonw
+        }
+        elseif (Test-Path -LiteralPath $Python) {
+            $exe = $Python
+        }
+        else {
+            throw ("Virtualenv Python not found. Expected: {0}" -f $Python)
+        }
+        $arg = '"{0}"' -f $MainPy
+        Write-KuroLog ("Starting legacy Python Kuro with '{0}'" -f $exe)
     }
     else {
-        throw ("Virtualenv Python not found. Expected: {0}" -f $Python)
+        $exe = $Engine
+        $arg = ""
+        $env:KURO_API = "on"
+        $env:KURO_HUD_SHOW_TEXT = "1"
+        Write-KuroLog ("Starting kuro-engine '{0}'" -f $exe)
     }
-
-    # Backend first. Kuro brain depends on it.
-    Start-OllamaBackend
 
     $existing = @(Get-KuroProcesses)
     # The Windows venv launcher (Scripts\pythonw.exe) often keeps a child
@@ -194,12 +211,19 @@ try {
 
     Write-KuroLog ("Starting Kuro with '{0}' from '{1}'" -f $exe, $KuroRoot)
 
-    $arg = '"{0}"' -f $MainPy
-    if ($ShowWindow) {
-        $proc = Start-Process -FilePath $exe -ArgumentList $arg -WorkingDirectory $KuroRoot -PassThru
+    if ($UsePython) {
+        if ($ShowWindow) {
+            $proc = Start-Process -FilePath $exe -ArgumentList $arg -WorkingDirectory $KuroRoot -PassThru
+        }
+        else {
+            $proc = Start-Process -FilePath $exe -ArgumentList $arg -WorkingDirectory $KuroRoot -WindowStyle Hidden -PassThru
+        }
+    }
+    elseif ($ShowWindow) {
+        $proc = Start-Process -FilePath $exe -WorkingDirectory $KuroRoot -PassThru
     }
     else {
-        $proc = Start-Process -FilePath $exe -ArgumentList $arg -WorkingDirectory $KuroRoot -WindowStyle Hidden -PassThru
+        $proc = Start-Process -FilePath $exe -WorkingDirectory $KuroRoot -WindowStyle Hidden -PassThru
     }
 
     Write-KuroLog ("Kuro started. PID={0}" -f $proc.Id)

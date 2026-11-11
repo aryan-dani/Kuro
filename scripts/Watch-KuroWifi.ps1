@@ -100,10 +100,13 @@ function Test-AtHome {
 function Get-KuroProcesses {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
-            ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
-            $_.CommandLine -and
-            ($_.CommandLine -match 'Kuro') -and
-            ($_.CommandLine -match '(run_kuro|main)\.py')
+            ($_.Name -eq "kuro-engine.exe") -or
+            (
+                ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
+                $_.CommandLine -and
+                ($_.CommandLine -match 'Kuro') -and
+                ($_.CommandLine -match '(run_kuro|main)\.py')
+            )
         }
 }
 

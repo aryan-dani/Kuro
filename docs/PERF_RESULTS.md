@@ -34,3 +34,21 @@ Ollama on a phrase miss stays as it was (llm `route_done` p50 1786.5 ms, p95 142
 Cold XTTS load stays serial with Whisper. Loading both at once has faulted CUDA before, and the warm is not on the per-command path once the models are up. Baseline `xtts_load` was 12753.4 ms once.
 
 Long-reply playback (`tts_done`) is still about the length of the audio. The win on that path is hearing the first sentence early, not a shorter reply.
+
+## Native engine, 11 Nov 2026
+
+Release `kuro-engine.exe` from `kuro-rs/target/release`.
+
+- File size: 9,019,904 bytes (8.6 MB).
+- Time from process start until the working set passed 5 MB: 736 ms.
+- Idle working set one second later, before the Whisper worker: 20.9 MB. Private bytes: 2.2 MB.
+- With the worker warmed (`KURO_STT_PREWARM=1` on this run, because the laptop was not on the home SSID): engine working set 13.5 MB and worker working set 11.7 MB. `POST /shutdown` stopped the worker.
+- Whisper small.en, CPU int8, beam 5, on a spoken "hello":
+  - Weight load: 1334 ms.
+  - First transcription: 1640 ms, text `Hello.`
+  - Second transcription, model already loaded: 1765 ms, text `Hello.`
+- The earlier 8.3 s figure was the whole test, including Windows speech synthesis, process start, and the first load. Pre-warm moves that load off the first hotkey. Away from the home SSID, the engine does not keep the worker running.
+- The Python engine that was already running (`run_kuro.py`) had a working set of 40 MB. Its private commit was about 4.6 GB because the PyTorch and Whisper runtimes stay mapped. The native process does not load those libraries at idle.
+
+Whisper transcription uses the local faster-whisper small.en weights through one persistent worker. Piper speech uses `piper.exe` and `bench/models/piper/en_US-lessac-medium.onnx`. `pyttsx3` uses WinRT `SpeechSynthesizer`. A spoken "hello" WAV came back from Whisper as a real transcript in the `kuro-stt` test (8.3 s, including model load).
+

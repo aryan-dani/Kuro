@@ -1,0 +1,55 @@
+name: Kuro Gate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: kuro-rs
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: LLVM libclang
+        shell: pwsh
+        run: |
+          $found = $null
+          foreach ($dir in @(
+            "C:\Program Files\LLVM\bin",
+            "$env:LOCALAPPDATA\LLVM-portable\clang+llvm-18.1.8-x86_64-pc-windows-msvc\bin"
+          )) {
+            if (Test-Path -LiteralPath (Join-Path $dir "libclang.dll")) {
+              $found = $dir
+              break
+            }
+          }
+          if (-not $found) {
+            $portable = Join-Path $env:LOCALAPPDATA "LLVM-portable"
+            New-Item -ItemType Directory -Force -Path $portable | Out-Null
+            $arc = Join-Path $portable "clang-llvm.tar.xz"
+            $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-x86_64-pc-windows-msvc.tar.xz"
+            Invoke-WebRequest -Uri $url -OutFile $arc
+            tar -xJf $arc -C $portable
+            $found = Join-Path $portable "clang+llvm-18.1.8-x86_64-pc-windows-msvc\bin"
+          }
+          "LIBCLANG_PATH=$found" >> $env:GITHUB_ENV
+
+      - name: Test-KuroGate
+        shell: pwsh
+        env:
+          KURO_GATE_CI: "1"
+        run: .\scripts\Test-KuroGate.ps1
