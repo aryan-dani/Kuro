@@ -1,0 +1,82 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/kuro-core",
+    "crates/kuro-tools",
+    "crates/kuro-router",
+    "crates/kuro-ipc",
+    "crates/kuro-hotkey",
+    "crates/kuro-wifi",
+    "crates/kuro-audio",
+    "crates/kuro-stt",
+    "crates/kuro-tts",
+    "crates/kuro-engine",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.lints.rust]
+warnings = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[workspace.dependencies]
+whisper-rs = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+fancy-regex = "0.14"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+ureq = "2"
+aes = "0.8"
+base64 = "0.22"
+sha2 = "0.10"
+hmac = "0.12"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_NetworkManagement_WiFi",
+    "Win32_System_Power",
+    "Win32_System_Threading",
+    "Win32_System_Pipes",
+    "Win32_Storage_FileSystem",
+    "Win32_Security",
+    "Win32_System_IO",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+axum = { version = "0.7", features = ["ws", "json", "tokio"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+rodio = "0.19"
+rusqlite = { version = "0.32", features = ["bundled"] }
+cpal = "0.15"
+png = "0.17"
+aes-gcm = "0.10"
+windows = { version = "0.61", features = [
+    "Media_SpeechSynthesis",
+    "Media_Core",
+    "Storage_Streams",
+    "Foundation",
+    "Win32_System_WinRT",
+] }

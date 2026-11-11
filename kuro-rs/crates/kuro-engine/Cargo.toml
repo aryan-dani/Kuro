@@ -1,0 +1,25 @@
+[package]
+name = "kuro-engine"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "kuro-engine"
+path = "src/main.rs"
+
+[dependencies]
+kuro-core = { path = "../kuro-core" }
+kuro-hotkey = { path = "../kuro-hotkey" }
+kuro-ipc = { path = "../kuro-ipc" }
+kuro-router = { path = "../kuro-router" }
+kuro-tools = { path = "../kuro-tools" }
+kuro-wifi = { path = "../kuro-wifi" }
+kuro-audio = { path = "../kuro-audio" }
+kuro-stt = { path = "../kuro-stt" }
+kuro-tts = { path = "../kuro-tts" }
+tokio = { workspace = true }
+[lints]
+workspace = true
+

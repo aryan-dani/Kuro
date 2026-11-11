@@ -1,0 +1,20 @@
+[package]
+name = "kuro-router"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kuro-core = { path = "../kuro-core" }
+kuro-tools = { path = "../kuro-tools" }
+regex = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+kuro-tools = { path = "../kuro-tools" }
+serde_json = { workspace = true }
+[lints]
+workspace = true
+

@@ -1,0 +1,29 @@
+[package]
+name = "kuro-ipc"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kuro-core = { path = "../kuro-core" }
+kuro-router = { path = "../kuro-router" }
+kuro-tools = { path = "../kuro-tools" }
+axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+serde_json = { workspace = true }
+http-body-util = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tower = { workspace = true }
+http-body-util = { workspace = true }
+serde_json = { workspace = true }
+kuro-core = { path = "../kuro-core" }
+kuro-tools = { path = "../kuro-tools" }
+axum = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+[lints]
+workspace = true
+
