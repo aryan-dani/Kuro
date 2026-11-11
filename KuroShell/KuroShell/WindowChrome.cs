@@ -13,6 +13,7 @@ internal static class WindowChrome
     private const uint SwpNoactivate = 0x0010;
     private const uint SwpShowwindow = 0x0040;
     private const uint MonitorDefaultToNearest = 2;
+    private const uint MonitorDefaultToPrimary = 1;
 
     public static bool PerPixelAvailable => false;
 
@@ -90,18 +91,39 @@ internal static class WindowChrome
         SetWindowRgn(hwnd, cluster, true);
     }
 
+    public static void ClipRoundRect(IntPtr hwnd, int width, int height, int radius)
+    {
+        if (width < 8 || height < 8)
+        {
+            return;
+        }
+
+        var r = Math.Clamp(radius, 0, Math.Min(width, height) / 2);
+        var region = CreateRoundRectRgn(0, 0, width + 1, height + 1, r * 2, r * 2);
+        SetWindowRgn(hwnd, region, true);
+    }
+
     public static (int X, int Y, int Width, int Height) Place(int width, int height, int gapPixels)
     {
-        GetCursorPos(out var cursor);
-        var monitor = MonitorFromPoint(cursor, MonitorDefaultToNearest);
+        // Prefer the primary display so the capsule stays screen-center, not under the cursor.
+        var monitor = MonitorFromPoint(default, MonitorDefaultToPrimary);
         var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
         if (!GetMonitorInfo(monitor, ref info))
         {
-            return (80, 80, width, height);
+            GetCursorPos(out var cursor);
+            monitor = MonitorFromPoint(cursor, MonitorDefaultToNearest);
+            info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+            if (!GetMonitorInfo(monitor, ref info))
+            {
+                return (80, 80, width, height);
+            }
         }
 
         var work = info.Work;
-        var x = work.Left + Math.Max(0, (work.Right - work.Left - width) / 2);
+        var area = work.Right - work.Left;
+        // Circle sits left of a wider pill, so a small left nudge keeps the pair optically centered.
+        var optical = Math.Clamp((width / 18), 0, 16);
+        var x = work.Left + Math.Max(0, (area - width) / 2) - optical;
         var y = work.Bottom - height - gapPixels;
         return (x, y, width, height);
     }

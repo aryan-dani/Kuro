@@ -10,10 +10,15 @@ public static class DesignTokens
     public const string FaceSemi = "Assets/Fonts/SpaceGrotesk-Bold.ttf#Space Grotesk";
     public const string FaceMono = "Assets/Fonts/JetBrainsMono-Regular.ttf#JetBrains Mono";
 
-    public static int BarCount { get; set; } = 11;
+    // Transcript card under the capsule — Poppins only, black like the pill.
+    public const string ChatFace = "Assets/Fonts/Poppins-Regular.ttf#Poppins";
+    public const string ChatFaceSemi = "Assets/Fonts/Poppins-SemiBold.ttf#Poppins";
+    public static double ChatRadius { get; } = 22;
+
+    public static int BarCount { get; set; } = 9;
     public static double BarWidth { get; set; } = 5;
-    public static double BarGap { get; set; } = 6;
-    public static double CapsuleHeight { get; set; } = 38;
+    public static double BarGap { get; set; } = 5;
+    public static double CapsuleHeight { get; set; } = 44;
     public static double WorkAreaGap { get; set; } = 24;
     public static int ResultHoldMs { get; set; } = 1500;
 
@@ -34,6 +39,11 @@ public static class DesignTokens
     public static Color Surface { get; } = Canvas;
     public static Color Hairline { get; } = Color.FromArgb(255, 20, 20, 20);
 
+    public static Color ChatPanel { get; } = Color.FromArgb(255, 10, 10, 10);
+    public static Color ChatInk { get; } = Color.FromArgb(255, 240, 240, 240);
+    public static Color ChatMuted { get; } = Color.FromArgb(255, 163, 163, 163);
+    public static Color ChatThumb { get; } = Color.FromArgb(180, 200, 200, 200);
+
     public static SolidColorBrush CanvasBrush { get; } = new(Canvas);
     public static SolidColorBrush CardBrush { get; } = new(Card);
     public static SolidColorBrush RailBrush { get; } = new(Rail);
@@ -42,6 +52,10 @@ public static class DesignTokens
     public static SolidColorBrush DimBrush { get; } = new(Dim);
     public static SolidColorBrush MutedBrush { get; } = new(Muted);
     public static SolidColorBrush HairlineBrush { get; } = new(Hairline);
+    public static SolidColorBrush ChatPanelBrush { get; } = new(ChatPanel);
+    public static SolidColorBrush ChatInkBrush { get; } = new(ChatInk);
+    public static SolidColorBrush ChatMutedBrush { get; } = new(ChatMuted);
+    public static SolidColorBrush ChatThumbBrush { get; } = new(ChatThumb);
 
     public static int CapsuleWidth
     {
@@ -49,7 +63,7 @@ public static class DesignTokens
         {
             var bars = BarCount * BarWidth;
             var gaps = Math.Max(0, BarCount - 1) * BarGap;
-            return (int)Math.Ceiling(bars + gaps + 48);
+            return (int)Math.Ceiling(bars + gaps + 44);
         }
     }
 }

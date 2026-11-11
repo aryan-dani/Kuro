@@ -2,52 +2,45 @@ using KuroShell.Core;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Graphics;
-using Windows.UI.ViewManagement;
 using WinRT.Interop;
 
 namespace KuroShell;
 
+/// <summary>
+/// Dark transcript card above the native capsule. Opens on pill click; collapses on chevron.
+/// </summary>
 public sealed class HudWindow : Window
 {
-    private static double CloseSize => DesignTokens.CapsuleHeight;
-    private const double RowGap = 16;
     private const double DockGap = 12;
-    private const double DockWidth = 480;
-    private const double DockHeight = 320;
+    private const double DockWidth = 640;
+    private const double DockHeight = 360;
+    private const int CapsuleBottomInset = 36;
+    private const double ThumbWidth = 4;
+    private const double ThumbInset = 10;
 
     private readonly Grid _root;
-    private readonly Border _capsule;
     private readonly Border _dock;
     private readonly StackPanel _turns;
     private readonly TextBlock _empty;
-    private readonly TranslateTransform _shift = new();
-    private readonly Border[] _bars;
-    private readonly Spring[] _springs;
-    private readonly Spring _widthSpring = new();
-    private readonly Spring _heightSpring = new();
+    private readonly ScrollViewer _scroll;
+    private readonly Border _thumb;
+    private readonly TranslateTransform _slide = new();
     private readonly DispatcherTimer _timer;
     private readonly NativeCapsule _native = new();
-    private readonly UISettings _ui = new();
+    private readonly EscapeHook _escape;
     private readonly Action _onThread;
     private double[] _levels = [];
     private string _state = "hidden";
-    private double _phase;
     private bool _shown;
     private bool _showIdleDot;
     private bool _suppress;
     private bool _dockOpen;
-    private double _drawnW = -1;
-    private double _drawnH = -1;
-    private int _anchorCenter;
-    private int _anchorBottom;
-    private int _placeX;
-    private int _placeY;
-    private int _placeW;
-    private int _placeH;
-    private bool _anchored;
+    private bool _animating;
+    private bool _historyOpen;
+    private bool _expandingHistory;
 
     public HudWindow()
     {
@@ -62,145 +55,95 @@ public sealed class HudWindow : Window
         {
             applied.IsAlwaysOnTop = true;
         }
+
         AppWindow.IsShownInSwitchers = false;
         SystemBackdrop = null;
         Title = "Kuro";
 
-        var count = DesignTokens.BarCount;
-        _bars = new Border[count];
-        _springs = new Spring[count];
-        var canvas = new Canvas
+        _turns = new StackPanel
         {
-            Width = count * DesignTokens.BarWidth + Math.Max(0, count - 1) * DesignTokens.BarGap,
-            Height = Travel,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            RenderTransform = _shift,
+            Spacing = 14,
+            Padding = new Thickness(0, 0, 14, 0),
         };
-        for (var i = 0; i < count; i++)
-        {
-            var bar = new Border
-            {
-                Width = DesignTokens.BarWidth,
-                Height = 4,
-                CornerRadius = new CornerRadius(0),
-                Background = new SolidColorBrush(DesignTokens.Ink),
-            };
-            Canvas.SetLeft(bar, i * (DesignTokens.BarWidth + DesignTokens.BarGap));
-            Canvas.SetTop(bar, (Travel - 4) / 2);
-            _bars[i] = bar;
-            _springs[i] = new Spring();
-            _springs[i].Snap(4);
-            canvas.Children.Add(bar);
-        }
-
-        _capsule = new Border
-        {
-            Width = DesignTokens.CapsuleWidth,
-            Height = DesignTokens.CapsuleHeight,
-            CornerRadius = new CornerRadius(0),
-            Background = DesignTokens.FillBrush,
-            BorderBrush = DesignTokens.HairlineBrush,
-            BorderThickness = new Thickness(1),
-            Child = canvas,
-        };
-        _capsule.PointerPressed += (_, args) =>
-        {
-            ToggleDock();
-            args.Handled = true;
-        };
-
-        var close = new Border
-        {
-            Width = DesignTokens.CapsuleHeight,
-            Height = DesignTokens.CapsuleHeight,
-            CornerRadius = new CornerRadius(0),
-            Background = DesignTokens.FillBrush,
-            BorderBrush = DesignTokens.HairlineBrush,
-            BorderThickness = new Thickness(1),
-            Child = new TextBlock
-            {
-                Text = "\u00D7",
-                FontFamily = new FontFamily(DesignTokens.FaceMedium),
-                FontSize = 20,
-                Foreground = DesignTokens.InkBrush,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
-            },
-        };
-        close.PointerPressed += (_, args) =>
-        {
-            Dismiss();
-            args.Handled = true;
-        };
-
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = RowGap,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-        row.Children.Add(close);
-        row.Children.Add(_capsule);
-
-        _turns = new StackPanel { Spacing = 14 };
         _empty = new TextBlock
         {
             Text = "Hold Ctrl+Alt+Space.",
-            FontFamily = new FontFamily(DesignTokens.Face),
+            FontFamily = new FontFamily(DesignTokens.ChatFace),
             FontSize = DesignTokens.BodySize,
-            Foreground = DesignTokens.MutedBrush,
+            Foreground = DesignTokens.ChatMutedBrush,
         };
         _turns.Children.Add(_empty);
+        _scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _turns,
+        };
+        _scroll.ViewChanged += (_, _) =>
+        {
+            SyncThumb();
+            MaybeRevealHistory();
+        };
+        _scroll.SizeChanged += (_, _) => SyncThumb();
+
+        _thumb = new Border
+        {
+            Width = ThumbWidth,
+            Height = 48,
+            CornerRadius = new CornerRadius(ThumbWidth / 2),
+            Background = DesignTokens.ChatThumbBrush,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, ThumbInset, ThumbInset, ThumbInset),
+            Opacity = 0.55,
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed,
+        };
+
+        var body = new Grid();
+        body.Children.Add(_scroll);
+        body.Children.Add(_thumb);
+
         _dock = new Border
         {
             Width = DockWidth,
-            Height = 0,
-            Margin = new Thickness(0, DockGap, 0, 0),
-            CornerRadius = new CornerRadius(0),
-            Background = DesignTokens.CardBrush,
-            BorderBrush = DesignTokens.HairlineBrush,
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(18, 14, 18, 14),
-            Visibility = Visibility.Collapsed,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
-            Child = new ScrollViewer
-            {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = _turns,
-            },
+            Height = DockHeight,
+            CornerRadius = new CornerRadius(DesignTokens.ChatRadius),
+            Background = DesignTokens.ChatPanelBrush,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(22, 18, 14, 18),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Child = body,
+            RenderTransform = _slide,
+            Opacity = 0,
         };
 
-        var column = new StackPanel
-        {
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-        column.Children.Add(row);
-        column.Children.Add(_dock);
         _root = new Grid
         {
-            Background = DesignTokens.FillBrush,
-            Children = { column },
+            Background = DesignTokens.ChatPanelBrush,
+            Width = DockWidth,
+            Height = DockHeight,
+            Children = { _dock },
         };
         Content = _root;
-        AppWindow.Resize(new SizeInt32(200, 56));
+        AppWindow.Resize(new SizeInt32((int)DockWidth, (int)DockHeight));
         AppWindow.Hide();
 
-        _widthSpring.Snap(RowWidth);
-        _heightSpring.Snap(DesignTokens.CapsuleHeight);
         ConversationLog.EnsureLoaded();
         RenderDock();
-        _onThread = RenderDock;
+        _onThread = OnThreadChanged;
         ConversationLog.Changed += _onThread;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => Tick();
         _timer.Start();
+        _native.BottomInset = CapsuleBottomInset;
         _native.DismissRequested = Dismiss;
+        // Pill stays visual-only for listening/speaking; the up-chevron opens and closes chat.
+        _native.CapsuleClicked = null;
+        _native.CollapseRequested = ToggleDock;
+        _escape = new EscapeHook(() => _shown && _native.Visible, Dismiss);
     }
 
     public Action? DismissRequested { get; set; }
@@ -211,11 +154,7 @@ public sealed class HudWindow : Window
         set => _showIdleDot = value;
     }
 
-    private static double Travel => Math.Max(8, DesignTokens.CapsuleHeight - 16);
-
-    private static double RowWidth => CloseSize + RowGap + DesignTokens.CapsuleWidth;
-
-    public void ShowState(string state)
+    public void ShowState(string state, string? label = null)
     {
         var next = string.IsNullOrWhiteSpace(state) ? "hidden" : state;
         if (_suppress && next != "hidden")
@@ -228,24 +167,82 @@ public sealed class HudWindow : Window
             _suppress = false;
         }
 
+        var wasShown = _shown;
         _state = next;
+        _native.BottomInset = CapsuleBottomInset;
         _native.SetMode(_state);
+        _native.SetCaption(Readable(next, label));
         if (_state == "hidden" && !_showIdleDot)
         {
+            if (!wasShown)
+            {
+                return;
+            }
+
             _shown = false;
-            _dockOpen = false;
-            _widthSpring.Snap(RowWidth);
-            _heightSpring.Snap(DesignTokens.CapsuleHeight);
-            _dock.Height = 0;
-            _dock.Visibility = Visibility.Collapsed;
+            HideDock(immediate: true);
             _native.Hide();
-            AppWindow.Hide();
             return;
         }
 
         _shown = true;
-        _native.Show();
-        _native.Paint(CurrentHeights());
+        if (!wasShown)
+        {
+            _native.Show();
+        }
+
+        // Up-chevron appears as soon as Kuro is answering (and stays while a turn exists).
+        UpdateChevron();
+        _native.Paint(_levels);
+        if (_dockOpen)
+        {
+            PlaceDockAbovePill();
+        }
+    }
+
+    private void OnThreadChanged()
+    {
+        // A new reply resets to the latest exchange until the user scrolls up.
+        _historyOpen = false;
+        RenderDock(scrollToLatest: true);
+        UpdateChevron();
+    }
+
+    private void UpdateChevron()
+    {
+        var answering = _state is "speaking" or "result" or "thinking" or "processing";
+        var hasTurn = ConversationLog.Buffer.Turns.Count > 0;
+        _native.CollapseVisible = _shown && (answering || hasTurn || _dockOpen);
+        _native.CollapsePointsDown = _dockOpen;
+    }
+
+    private static string Readable(string state, string? label)
+    {
+        var text = label ?? "";
+        if (text.Contains("quiet", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Quiet";
+        }
+
+        if (text.Contains("short", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Hold";
+        }
+
+        if (text.Contains("fail", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("could not", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("heard nothing", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Quiet";
+        }
+
+        return state switch
+        {
+            "thinking" or "processing" => "Thinking",
+            "result" => "",
+            "error" => "Quiet",
+            _ => "",
+        };
     }
 
     public void SetLevels(double[] levels)
@@ -255,47 +252,173 @@ public sealed class HudWindow : Window
 
     private void Dismiss()
     {
+        if (DispatcherQueue is not null && !DispatcherQueue.HasThreadAccess)
+        {
+            DispatcherQueue.TryEnqueue(Dismiss);
+            return;
+        }
+
         _suppress = true;
-        _dockOpen = false;
+        HideDock(immediate: true);
         ShowState("hidden");
         DismissRequested?.Invoke();
     }
 
     private void ToggleDock()
     {
-        _dockOpen = !_dockOpen;
+        if (DispatcherQueue is not null && !DispatcherQueue.HasThreadAccess)
+        {
+            DispatcherQueue.TryEnqueue(ToggleDock);
+            return;
+        }
+
         if (_dockOpen)
         {
-            RenderDock();
-            _dock.Visibility = Visibility.Visible;
-            _widthSpring.Snap(DockWidth);
+            HideDock();
+            return;
         }
+
+        ShowDock();
     }
 
-    private void Place()
+    private void ShowDock()
     {
-        var hwnd = WindowNative.GetWindowHandle(this);
-        var scale = WindowChrome.DpiScale(hwnd);
-        if (!_anchored)
+        if (_animating)
         {
-            var gap = (int)Math.Ceiling(80 * scale);
-            var probe = WindowChrome.Place(10, 10, gap);
-            _anchorCenter = probe.X + 5;
-            _anchorBottom = probe.Y + 10;
-            _anchored = true;
+            return;
         }
 
-        WindowChrome.MakeOverlay(hwnd);
-        _shown = true;
-        ApplyBounds(scale, force: true);
+        _historyOpen = false;
+        RenderDock(scrollToLatest: true);
+        _dockOpen = true;
+        UpdateChevron();
+        PlaceDockAbovePill();
         AppWindow.Show();
         if (AppWindow.Presenter is OverlappedPresenter live)
         {
             live.IsAlwaysOnTop = true;
         }
 
-        WindowChrome.ShowTopmost(hwnd, _placeX, _placeY, _placeW, _placeH);
-        WindowChrome.ShowTopmost(hwnd, _placeX, _placeY, _placeW, _placeH);
+        var hwnd = WindowNative.GetWindowHandle(this);
+        WindowChrome.MakeOverlay(hwnd);
+        ClipCard(hwnd);
+        WindowChrome.ShowTopmost(hwnd, AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height);
+        AnimateOpen();
+        SyncThumb();
+    }
+
+    private void HideDock(bool immediate = false)
+    {
+        if (!_dockOpen && !AppWindow.IsVisible)
+        {
+            UpdateChevron();
+            return;
+        }
+
+        _dockOpen = false;
+        UpdateChevron();
+        if (immediate || _animating)
+        {
+            _dock.Opacity = 0;
+            _slide.Y = 18;
+            AppWindow.Hide();
+            return;
+        }
+
+        AnimateClose(() => AppWindow.Hide());
+    }
+
+    private void AnimateOpen()
+    {
+        _animating = true;
+        _slide.Y = 22;
+        _dock.Opacity = 0;
+        var story = new Storyboard();
+        var move = new DoubleAnimation
+        {
+            To = 0,
+            Duration = TimeSpan.FromMilliseconds(280),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(move, _slide);
+        Storyboard.SetTargetProperty(move, "Y");
+        var fade = new DoubleAnimation
+        {
+            To = 1,
+            Duration = TimeSpan.FromMilliseconds(240),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(fade, _dock);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        story.Children.Add(move);
+        story.Children.Add(fade);
+        story.Completed += (_, _) => _animating = false;
+        story.Begin();
+    }
+
+    private void AnimateClose(Action done)
+    {
+        _animating = true;
+        var story = new Storyboard();
+        var move = new DoubleAnimation
+        {
+            To = 18,
+            Duration = TimeSpan.FromMilliseconds(200),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+        };
+        Storyboard.SetTarget(move, _slide);
+        Storyboard.SetTargetProperty(move, "Y");
+        var fade = new DoubleAnimation
+        {
+            To = 0,
+            Duration = TimeSpan.FromMilliseconds(180),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+        };
+        Storyboard.SetTarget(fade, _dock);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        story.Children.Add(move);
+        story.Children.Add(fade);
+        story.Completed += (_, _) =>
+        {
+            _animating = false;
+            done();
+        };
+        story.Begin();
+    }
+
+    private void PlaceDockAbovePill()
+    {
+        var hwnd = WindowNative.GetWindowHandle(this);
+        var scale = WindowChrome.DpiScale(hwnd);
+        var pixelsW = Math.Max(1, (int)Math.Ceiling(DockWidth * scale));
+        var pixelsH = Math.Max(1, (int)Math.Ceiling(DockHeight * scale));
+        var gap = Math.Max(1, (int)Math.Ceiling(DockGap * scale));
+
+        var pill = WindowChrome.Place(_native.PixelWidth, _native.PixelHeight, CapsuleBottomInset);
+        var x = pill.X + ((_native.PixelWidth - pixelsW) / 2);
+        var y = pill.Y - gap - pixelsH;
+        if (y < 8)
+        {
+            y = 8;
+        }
+
+        _root.Width = DockWidth;
+        _root.Height = DockHeight;
+        _dock.Width = DockWidth;
+        _dock.Height = DockHeight;
+        AppWindow.Resize(new SizeInt32(pixelsW, pixelsH));
+        AppWindow.Move(new PointInt32(x, y));
+        ClipCard(hwnd);
+        WindowChrome.ShowTopmost(hwnd, x, y, pixelsW, pixelsH);
+    }
+
+    private void ClipCard(IntPtr hwnd)
+    {
+        var scale = WindowChrome.DpiScale(hwnd);
+        var pixelsW = Math.Max(1, (int)Math.Ceiling(DockWidth * scale));
+        var pixelsH = Math.Max(1, (int)Math.Ceiling(DockHeight * scale));
+        var radius = Math.Max(1, (int)Math.Ceiling(DesignTokens.ChatRadius * scale));
+        WindowChrome.ClipRoundRect(hwnd, pixelsW, pixelsH, radius);
     }
 
     private void Tick()
@@ -305,77 +428,39 @@ public sealed class HudWindow : Window
             return;
         }
 
-        _phase += 0.033;
-        _shift.X = 0;
-        var animate = _ui.AnimationsEnabled;
-        for (var i = 0; i < _bars.Length; i++)
+        _native.Paint(_levels);
+        if (_dockOpen)
         {
-            var bar = _springs[i].Step(Target(i), 0.033, animate);
-            bar = Math.Clamp(bar, 3, Travel);
-            _bars[i].Height = bar;
-            Canvas.SetTop(_bars[i], (Travel - bar) / 2);
-        }
-
-        _native.Paint(CurrentHeights());
-
-        var targetH = DesignTokens.CapsuleHeight + (_dockOpen ? DockGap + DockHeight : 0);
-        var height = _heightSpring.Step(targetH, 0.033, animate);
-        if (!_dockOpen && height < DesignTokens.CapsuleHeight + 1)
-        {
-            _dock.Visibility = Visibility.Collapsed;
-            _widthSpring.Snap(RowWidth);
+            PlaceDockAbovePill();
+            SyncThumb();
         }
     }
 
-    private double[] CurrentHeights()
+    private void SyncThumb()
     {
-        var values = new double[_bars.Length];
-        for (var i = 0; i < _bars.Length; i++)
+        var extent = _scroll.ExtentHeight;
+        var viewport = _scroll.ViewportHeight;
+        if (extent <= viewport + 1 || viewport <= 0)
         {
-            values[i] = _bars[i].Height;
-        }
-
-        return values;
-    }
-
-    private void ApplyBounds(double scale, bool force, double width = 0, double height = 0)
-    {
-        width = Math.Clamp(width <= 0 ? RowWidth : width, 80, 520);
-        height = Math.Clamp(height <= 0 ? DesignTokens.CapsuleHeight : height, 32, 420);
-
-        if (!force && Math.Abs(width - _drawnW) < 0.8 && Math.Abs(height - _drawnH) < 0.8)
-        {
+            _thumb.Visibility = Visibility.Collapsed;
             return;
         }
 
-        _drawnW = width;
-        _drawnH = height;
-        var dock = Math.Max(0, height - DesignTokens.CapsuleHeight - DockGap);
-        _dock.Height = dock;
-        _dock.Visibility = dock < 1 ? Visibility.Collapsed : Visibility.Visible;
-        _root.Width = width;
-        _root.Height = height;
-
-        var pixelsW = Math.Max(1, (int)Math.Ceiling(width * scale));
-        var pixelsH = Math.Max(1, (int)Math.Ceiling(height * scale));
-        _placeX = _anchorCenter - (pixelsW / 2);
-        _placeY = _anchorBottom - pixelsH;
-        _placeW = pixelsW;
-        _placeH = pixelsH;
-        AppWindow.Resize(new SizeInt32(pixelsW, pixelsH));
-        AppWindow.Move(new PointInt32(_placeX, _placeY));
-        if (_shown)
-        {
-            var hwnd = WindowNative.GetWindowHandle(this);
-            WindowChrome.ShowTopmost(hwnd, _placeX, _placeY, pixelsW, pixelsH);
-        }
+        var track = Math.Max(24, viewport - (ThumbInset * 2));
+        var size = Math.Clamp(viewport / extent * track, 28, track);
+        var max = Math.Max(0, extent - viewport);
+        var offset = max <= 0 ? 0 : _scroll.VerticalOffset / max;
+        var top = ThumbInset + ((track - size) * offset);
+        _thumb.Height = size;
+        _thumb.Margin = new Thickness(0, top, ThumbInset, ThumbInset);
+        _thumb.Visibility = Visibility.Visible;
     }
 
-    private void RenderDock()
+    private void RenderDock(bool scrollToLatest = false)
     {
         if (DispatcherQueue is not null && !DispatcherQueue.HasThreadAccess)
         {
-            DispatcherQueue.TryEnqueue(RenderDock);
+            DispatcherQueue.TryEnqueue(() => RenderDock(scrollToLatest));
             return;
         }
 
@@ -384,13 +469,76 @@ public sealed class HudWindow : Window
         if (turns.Count == 0)
         {
             _turns.Children.Add(_empty);
+            SyncThumb();
             return;
         }
 
-        foreach (var turn in turns)
+        if (_historyOpen)
         {
-            _turns.Children.Add(TurnBlock(turn));
+            foreach (var turn in turns)
+            {
+                _turns.Children.Add(TurnBlock(turn));
+            }
         }
+        else
+        {
+            // Latest exchange only. A short pull zone above lets deliberate scroll-up reveal history.
+            if (turns.Count > 1)
+            {
+                _turns.Children.Add(new Border
+                {
+                    Height = 56,
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
+                    Child = new TextBlock
+                    {
+                        Text = "Scroll up for earlier",
+                        FontFamily = new FontFamily(DesignTokens.ChatFace),
+                        FontSize = 12,
+                        Foreground = DesignTokens.ChatMutedBrush,
+                        Opacity = 0.55,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
+                });
+            }
+
+            _turns.Children.Add(TurnBlock(turns[^1]));
+        }
+
+        if (scrollToLatest || !_historyOpen)
+        {
+            ScrollToLatest();
+        }
+
+        SyncThumb();
+    }
+
+    private void ScrollToLatest()
+    {
+        DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _ = _scroll.ChangeView(null, _scroll.ScrollableHeight, null, true);
+            SyncThumb();
+        });
+    }
+
+    private void MaybeRevealHistory()
+    {
+        if (_historyOpen || _expandingHistory || ConversationLog.Buffer.Turns.Count <= 1)
+        {
+            return;
+        }
+
+        // Only expand when the user deliberately pulls toward the top of the latest-only view.
+        if (_scroll.VerticalOffset > 12)
+        {
+            return;
+        }
+
+        _expandingHistory = true;
+        _historyOpen = true;
+        RenderDock(scrollToLatest: true);
+        _expandingHistory = false;
     }
 
     private static StackPanel TurnBlock(Turn turn)
@@ -409,10 +557,11 @@ public sealed class HudWindow : Window
         return new TextBlock
         {
             Text = text,
-            FontFamily = new FontFamily(DesignTokens.FaceMedium),
+            FontFamily = new FontFamily(DesignTokens.ChatFaceSemi),
             FontSize = 12,
-            Foreground = DesignTokens.MutedBrush,
+            Foreground = DesignTokens.ChatMutedBrush,
             Margin = new Thickness(0, 6, 0, 0),
+            IsTextSelectionEnabled = true,
         };
     }
 
@@ -421,10 +570,11 @@ public sealed class HudWindow : Window
         return new TextBlock
         {
             Text = text,
-            FontFamily = new FontFamily(DesignTokens.Face),
-            FontSize = 14,
-            Foreground = DesignTokens.InkBrush,
+            FontFamily = new FontFamily(DesignTokens.ChatFace),
+            FontSize = 15,
+            Foreground = DesignTokens.ChatInkBrush,
             TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
         };
     }
 
@@ -433,35 +583,11 @@ public sealed class HudWindow : Window
         return new TextBlock
         {
             Text = text,
-            FontFamily = new FontFamily(DesignTokens.Face),
+            FontFamily = new FontFamily(DesignTokens.ChatFace),
             FontSize = 12,
-            Foreground = DesignTokens.MutedBrush,
+            Foreground = DesignTokens.ChatMutedBrush,
+            IsTextSelectionEnabled = true,
         };
-    }
-
-    private double Target(int index)
-    {
-        const double floor = 3;
-        var span = Travel - floor;
-        if (_state == "thinking")
-        {
-            var wave = 0.5 + 0.5 * Math.Sin(_phase * 5.2 - index * 0.62);
-            return floor + span * (0.18 + 0.62 * wave);
-        }
-
-        if (_state == "result")
-        {
-            return floor + span * 0.38;
-        }
-
-        var level = index < _levels.Length ? Math.Clamp(_levels[index], 0, 1) : 0;
-        var shaped = Math.Pow(level, 0.55);
-        var mid = Math.Max(1, (_bars.Length - 1) / 2.0);
-        var center = 1 - (Math.Abs(index - mid) / mid);
-        var wobble = 0.12 * Math.Sin((_phase * 2.6) + (index * 0.55));
-        var idle = Math.Clamp((0.08 + (0.72 * center * center)) + (wobble * center), 0.06, 1);
-        var mixed = shaped > 0.12 ? shaped : idle;
-        return floor + (span * mixed);
     }
 
     private static string Clock(string at)

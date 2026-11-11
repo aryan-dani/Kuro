@@ -1,13 +1,13 @@
 using H.NotifyIcon;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace KuroShell;
 
 public partial class App : Application
 {
     private TaskbarIcon? _tray;
+    private string _trayState = "";
     private EngineClient? _client;
     private CancellationTokenSource? _events;
 
@@ -117,6 +117,7 @@ public partial class App : Application
             }
             catch (Exception)
             {
+                Supervisor.EnsureRunning();
                 await Task.Delay(1000, cancel);
             }
         }
@@ -130,6 +131,7 @@ public partial class App : Application
             var state = doc.RootElement.TryGetProperty("state", out var stateValue)
                 ? stateValue.GetString() ?? "hidden"
                 : "hidden";
+            var label = doc.RootElement.TryGetProperty("label", out var labelValue) ? labelValue.GetString() ?? "" : "";
             var you = doc.RootElement.TryGetProperty("you", out var youValue) ? youValue.GetString() ?? "" : "";
             var kuro = doc.RootElement.TryGetProperty("kuro", out var kuroValue) ? kuroValue.GetString() ?? "" : "";
             if (doc.RootElement.TryGetProperty("levels", out var levels))
@@ -145,7 +147,7 @@ public partial class App : Application
             }
 
             ConversationLog.Observe(you, kuro);
-            Hud.ShowState(state);
+            Hud.ShowState(state, label);
             SetTray(state);
         }
         catch (Exception)
@@ -157,7 +159,7 @@ public partial class App : Application
 
     private void SetTray(string state)
     {
-        if (_tray is null)
+        if (_tray is null || string.Equals(_trayState, state, StringComparison.Ordinal))
         {
             return;
         }
@@ -175,7 +177,18 @@ public partial class App : Application
             return;
         }
 
-        _tray.IconSource = new BitmapImage(new Uri(path));
+        try
+        {
+            using var image = System.Drawing.Image.FromFile(path);
+            using var bitmap = new System.Drawing.Bitmap(image, new System.Drawing.Size(32, 32));
+            using var raw = System.Drawing.Icon.FromHandle(bitmap.GetHicon());
+            _tray.Icon = (System.Drawing.Icon)raw.Clone();
+            _trayState = state;
+        }
+        catch (Exception)
+        {
+            _trayState = "";
+        }
     }
 
     private async Task Quit()

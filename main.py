@@ -230,12 +230,20 @@ def _setup_logging() -> None:
     logger.info("Logging to %s", log_path)
 
 
-def _speak(text: str, *, fast: bool = False) -> None:
+def _speak(text: str, *, fast: bool = False, on_audio_start=None) -> None:
     import tts
 
     _cancel_speech.clear()
     # Serialize speech so overlapping calls can't double-play
-    tts.speak(text, fast=fast)
+    tts.speak(text, fast=fast, on_audio_start=on_audio_start)
+
+
+def _mark_speaking() -> None:
+    """Flip the HUD to Speaking only when audio is about to play."""
+    if tray_manager:
+        tray_manager.set_state(KuroState.SPEAKING)
+    if overlay_manager:
+        overlay_manager.set_state(OverlayState.SPEAKING, subtitle="Speaking...")
 
 
 def _transcribe(audio_path: str, partial: bool = False) -> str:
@@ -342,16 +350,16 @@ def _early_hub_or_local_home(text: str) -> None:
             reply = result.get("reply") or "Welcome home, sir."
             if overlay_manager:
                 overlay_manager.set_transcript(kuro=reply)
-                overlay_manager.set_state(OverlayState.SPEAKING, subtitle="Welcome home")
+                overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
             hub_client.apply_client_actions(result.get("client_actions") or [])
-            _speak(reply)
+            _speak(reply, on_audio_start=_mark_speaking)
             return
 
     if overlay_manager:
         overlay_manager.set_transcript(kuro="Welcome home, sir.")
-        overlay_manager.set_state(OverlayState.SPEAKING, subtitle="Welcome home")
+        overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
     if phrases.fire_daddys_home_parallel():
-        _speak("Welcome home, sir.")
+        _speak("Welcome home, sir.", on_audio_start=_mark_speaking)
 
 
 def start_push_to_talk() -> None:
@@ -481,10 +489,12 @@ def stop_push_to_talk() -> None:
             media_hold.release()
             return
         if overlay_manager:
+            overlay_manager.clear_levels()
+            overlay_manager.set_transcript(you="", kuro="")
             overlay_manager.set_state(
                 OverlayState.ERROR,
-                subtitle="Mic too quiet — check Windows mic settings",
-                hold_ms=3000,
+                subtitle="Mic too quiet",
+                hold_ms=2200,
             )
         if tray_manager:
             tray_manager.set_state(KuroState.IDLE)
@@ -504,10 +514,12 @@ def stop_push_to_talk() -> None:
             media_hold.release()
             return
         if overlay_manager:
+            overlay_manager.clear_levels()
+            overlay_manager.set_transcript(you="", kuro="")
             overlay_manager.set_state(
                 OverlayState.ERROR,
-                subtitle="Too short — keep holding while you talk",
-                hold_ms=2500,
+                subtitle="Too short — keep holding",
+                hold_ms=2200,
             )
         if tray_manager:
             tray_manager.set_state(KuroState.IDLE)
@@ -571,18 +583,17 @@ def _is_hub_desk_phrase(text: str) -> bool:
 
 def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
     """Hub first for desk rituals. Meet, WhatsApp, workflows, and inbox stay on this laptop."""
-    local_only = phrases._normalize(user_prompt)
-    if (
-        phrases._is_meet(local_only)
-        or phrases._is_whatsapp(local_only)
-        or phrases._is_workflow(local_only)
-        or phrases._is_inbox(local_only)
-    ):
-        handled = phrases.try_handle(user_prompt)
-        if handled is not None:
-            if overlay_manager:
-                overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
-            return handled.reply, handled.skip_tts, handled.after_speak, handled.force_fast_tts
+    # Anything phrases can answer stays on this laptop — never waits on hub or Ollama.
+    local_first = phrases.try_handle(user_prompt)
+    if local_first is not None:
+        if overlay_manager:
+            overlay_manager.set_state(OverlayState.THINKING, subtitle="On it...")
+        return (
+            local_first.reply,
+            local_first.skip_tts,
+            local_first.after_speak,
+            local_first.force_fast_tts,
+        )
 
     if hub_client.configured():
         result = hub_client.command(user_prompt, early=False)
@@ -608,7 +619,7 @@ def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
             hub_client.apply_client_actions(result.get("client_actions") or [])
             return result.get("reply") or "", False, None, False
 
-    # Local inbox + any remaining local phrases, then LLM
+    # Local inbox + any remaining local phrases, then LLM as last resort only.
     handled = phrases.try_handle(user_prompt)
     if handled is not None:
         if overlay_manager:
@@ -619,13 +630,55 @@ def _route_command(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
     if mode == "off":
         if overlay_manager:
             overlay_manager.set_state(OverlayState.THINKING, subtitle="No match")
-        return "No command matched.", False, None, False
+        return (
+            "I don't have a phrase for that yet. Desk, news, music, meet, WhatsApp, and workflows work offline.",
+            False,
+            None,
+            True,
+        )
 
+    return _llm_last_resort(user_prompt)
+
+
+def _llm_last_resort(user_prompt: str) -> tuple[str, bool, Callable | None, bool]:
+    """Only path that may touch Ollama. Speaks a wait line, starts serve, then answers."""
     import brain
+    import ollama_runtime
 
     if overlay_manager:
         overlay_manager.set_state(OverlayState.THINKING, subtitle="Thinking...")
-    return brain.think(user_prompt), False, None, False
+
+    if ollama_runtime.is_up():
+        return brain.think(user_prompt), False, None, False
+
+    prompt = user_prompt
+
+    def _start_then_answer() -> None:
+        if overlay_manager:
+            overlay_manager.set_state(OverlayState.THINKING, subtitle="Starting neural engine")
+        ok = ollama_runtime.ensure_ready(timeout=45.0)
+        if not ok:
+            _speak(
+                "I could not start the neural engine.",
+                fast=True,
+                on_audio_start=_mark_speaking,
+            )
+            return
+        if overlay_manager:
+            overlay_manager.set_state(OverlayState.THINKING, subtitle="Thinking...")
+        try:
+            answer = brain.think(prompt)
+        except Exception:
+            logger.exception("LLM after Ollama start failed")
+            answer = "The neural engine started, but the reply failed."
+        _speak(answer, on_audio_start=_mark_speaking)
+
+    return (
+        "Neural engine is off. Please wait while I start it.",
+        False,
+        _start_then_answer,
+        True,
+    )
 
 
 def _follow_up_listen() -> None:
@@ -715,14 +768,12 @@ def process_audio_file(audio_file: str) -> None:
 
         logger.info('Kuro: "%s"', reply)
 
-        if tray_manager:
-            tray_manager.set_state(KuroState.SPEAKING)
         if overlay_manager:
             overlay_manager.set_transcript(kuro=reply)
-            overlay_manager.set_state(OverlayState.SPEAKING, subtitle="Speaking...")
 
         if not skip_tts:
-            _speak(reply, fast=force_fast)
+            # Stay on Thinking while XTTS synthesizes; Speaking starts with first audio.
+            _speak(reply, fast=force_fast, on_audio_start=_mark_speaking)
         if after_speak:
             try:
                 after_speak()

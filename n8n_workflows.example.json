@@ -3,7 +3,14 @@
     "hello_kuro": {
       "webhook": "hello-kuro",
       "description": "Replies with a short hello from n8n",
-      "aliases": ["hello workflow", "n8n hello"],
+      "aliases": ["hello workflow", "n8n hello", "hello kuro", "say hello"],
+      "mode": "sync",
+      "takes_input": false
+    },
+    "kuro_status": {
+      "webhook": "kuro-status",
+      "description": "Confirms n8n on the hub is reachable",
+      "aliases": ["n8n status", "workflow status", "hub status"],
       "mode": "sync",
       "takes_input": false
     },

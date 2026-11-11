@@ -66,6 +66,24 @@ _device = None
 _speak_lock = threading.Lock()
 _last_spoken = ""
 _last_spoken_at = 0.0
+_audio_start_cb = None
+_audio_start_fired = False
+
+
+def _signal_audio_start() -> None:
+    """Fire once when the first audible sample is about to play."""
+    global _audio_start_fired, _audio_start_cb
+    if _audio_start_fired:
+        return
+    _audio_start_fired = True
+    cb = _audio_start_cb
+    _audio_start_cb = None
+    if cb is None:
+        return
+    try:
+        cb()
+    except Exception:
+        logger.exception("on_audio_start failed")
 
 def get_device() -> str:
     """Verifies CUDA availability on the RTX 5070, falling back to CPU with warning."""
@@ -173,12 +191,13 @@ def is_ready() -> bool:
     return _model is not None and _cached_latents is not None
 
 
-def speak(text: str, *, fast: bool = False):
+def speak(text: str, *, fast: bool = False, on_audio_start=None):
     """
     Speak text aloud. Prefers the natural XTTS voice once preloaded.
     Serialized + de-duped so concurrent/double instances of the same line don't stack.
+    on_audio_start fires once when the first audible sample is about to play.
     """
-    global _last_spoken, _last_spoken_at
+    global _last_spoken, _last_spoken_at, _audio_start_cb, _audio_start_fired
 
     if not text or not text.strip():
         return
@@ -194,6 +213,8 @@ def speak(text: str, *, fast: bool = False):
             return
         _last_spoken = cleaned_text
         _last_spoken_at = now
+        _audio_start_cb = on_audio_start
+        _audio_start_fired = False
 
         # Their cloned voice when it is already loaded. A cold load must not block the reply.
         if is_ready():
@@ -218,31 +239,34 @@ def speak(text: str, *, fast: bool = False):
         engine = compute_policy.prefer_tts(fast=fast)
         logger.info("TTS engine=%s mode=%s", engine, compute_policy.mode())
 
-        if engine == "piper":
-            try:
-                _speak_piper(cleaned_text)
-                return
-            except Exception as e:
-                logger.warning("Piper failed (%s); falling back", e)
-                engine = "xtts" if compute_policy.on_ac() and not fast else "pyttsx3"
-
-        if engine == "xtts" and is_ready():
-            try:
-                _speak_xtts(cleaned_text)
-                return
-            except Exception as e:
-                logger.warning("XTTS failed (%s); falling back to pyttsx3", e)
-
-        # Never load XTTS inside a reply. A cold model is what made speech lag.
-        if engine == "xtts":
-            logger.info("XTTS not ready; speaking with the fast voice")
-            if compute_policy._piper_available():
+        try:
+            if engine == "piper":
                 try:
                     _speak_piper(cleaned_text)
                     return
                 except Exception as e:
                     logger.warning("Piper failed (%s); falling back", e)
-        _speak_pyttsx3(cleaned_text)
+                    engine = "xtts" if compute_policy.on_ac() and not fast else "pyttsx3"
+
+            if engine == "xtts" and is_ready():
+                try:
+                    _speak_xtts(cleaned_text)
+                    return
+                except Exception as e:
+                    logger.warning("XTTS failed (%s); falling back to pyttsx3", e)
+
+            # Never load XTTS inside a reply. A cold model is what made speech lag.
+            if engine == "xtts":
+                logger.info("XTTS not ready; speaking with the fast voice")
+                if compute_policy._piper_available():
+                    try:
+                        _speak_piper(cleaned_text)
+                        return
+                    except Exception as e:
+                        logger.warning("Piper failed (%s); falling back", e)
+            _speak_pyttsx3(cleaned_text)
+        finally:
+            _audio_start_cb = None
 
 
 def _warm_xtts(blocking: bool = True) -> None:
@@ -311,6 +335,7 @@ def _speak_piper(cleaned_text: str) -> None:
     import timing
 
     timing.mark("tts_first_audio")
+    _signal_audio_start()
     sd.play(audio_data, samplerate=sample_rate)
     sd.wait()
     timing.mark("tts_done")
@@ -328,6 +353,7 @@ def _play_cached(audio: np.ndarray) -> None:
     import timing
 
     timing.mark("tts_first_audio")
+    _signal_audio_start()
     sd.play(audio, samplerate=24000)
     sd.wait()
     timing.mark("tts_done")
@@ -408,6 +434,7 @@ def _speak_xtts(cleaned_text: str) -> None:
             pieces.append(audio)
             if not started_audio:
                 timing.mark("tts_first_audio")
+                _signal_audio_start()
                 started_audio = True
             player.write(np.ascontiguousarray(audio.reshape(-1, 1)))
     finally:
@@ -417,6 +444,7 @@ def _speak_xtts(cleaned_text: str) -> None:
         raise errors[0]
     if not started_audio:
         timing.mark("tts_first_audio")
+        _signal_audio_start()
     timing.mark("tts_done")
     logger.info("XTTS sentences %.2fs on %s", time.perf_counter() - start_time, get_device())
     if pieces:
@@ -442,6 +470,7 @@ def _speak_pyttsx3(cleaned_text: str) -> None:
         import timing
 
         timing.mark("tts_first_audio")
+        _signal_audio_start()
         engine.say(cleaned_text)
         engine.runAndWait()
         timing.mark("tts_done")

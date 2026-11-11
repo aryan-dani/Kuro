@@ -63,6 +63,17 @@ public sealed class EngineSupervisor
         Launch();
     }
 
+    public void EnsureRunning()
+    {
+        if (MutexExists() || _process is { HasExited: false })
+        {
+            return;
+        }
+
+        Attached = false;
+        Launch();
+    }
+
     public void Restart()
     {
         _stopRequested = false;

@@ -118,7 +118,7 @@ class Brain:
             )
         except Exception as e:
             logger.error("Failed to communicate with Ollama: %s", e)
-            return "I cannot reach my neural engine. Please ensure Ollama is running."
+            return "The neural engine is still starting. Try that again in a moment."
 
         message = response.get("message", {})
         tool_calls = message.get("tool_calls", [])
@@ -188,7 +188,11 @@ def clear_thread() -> None:
 
 
 def think(user_text: str, on_tool_start: Callable[[str], None] | None = None) -> str:
-    """Lazy LLM path — only constructs Brain on first freeform ask."""
+    """Lazy LLM path — only constructs Brain on first freeform ask.
+
+    Callers must ensure Ollama is up (see ollama_runtime.ensure_ready) before this
+    when they want auto-start behavior. This function does not start the daemon.
+    """
     mode = config.KURO_LLM_MODE
     if mode == "off":
         return "No command matched."
@@ -197,8 +201,8 @@ def think(user_text: str, on_tool_start: Callable[[str], None] | None = None) ->
     if _brain is None:
         try:
             _brain = Brain()
-        except Exception as e:
+        except Exception:
             logger.exception("Brain init failed")
-            return "I cannot reach my neural engine right now."
+            return "The neural engine failed to start."
 
     return _brain.process(user_text, on_tool_start)

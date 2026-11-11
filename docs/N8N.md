@@ -8,6 +8,12 @@ The n8n container is already running. Hello Kuro is imported and active. `KURO_N
 
 Webhooks are reachable only on localhost and Tailscale. Do not publish port 5678 on `0.0.0.0`, and do not expose the editor to the internet.
 
+## HTTP and the "not secure" badge
+
+Chrome shows "Not secure" on `http://100.78.60.50:5678` because the URL is plain HTTP. That is expected on the tailnet. Tailscale already encrypts the path. Do not put n8n on a public HTTPS hostname for this setup.
+
+If the Webhook node itself shows an insecure / no-auth badge, the Header Auth credential did not attach on import. Set Authentication to Header Auth, header name `X-Kuro-Token`, value equal to `KURO_N8N_TOKEN` on the laptop, then save and activate. Kuro already sends that header. A wrong token makes Kuro say `n8n rejected my token.`
+
 ## Run n8n
 
 On `kuro-server`, from a copy of [deploy/n8n/docker-compose.yml](../deploy/n8n/docker-compose.yml):
@@ -55,9 +61,15 @@ Say `run hello workflow` or `n8n hello`. Say `log idea build the reader` to pass
 
 If the base URL or token is empty, Kuro says `n8n is not configured.` Desk commands still work.
 
+## Status workflow
+
+Import [examples/n8n/kuro_status.json](../examples/n8n/kuro_status.json) the same way as Hello Kuro. Path `kuro-status`. Same `X-Kuro-Token` header auth. Activate it. Add the `kuro_status` entry from [n8n_workflows.example.json](../n8n_workflows.example.json) to `%LOCALAPPDATA%\Kuro\n8n_workflows.json` if it is missing. Say `n8n status` or `workflow status`.
+
 ## Check by hand
 
 1. Say the hello workflow and hear "Hello from n8n".
-2. Stop the n8n container. Say the hello workflow again and hear that Kuro cannot reach n8n. Say "desk off" or "what's the news" and confirm those still answer.
-3. Add a new entry to `%LOCALAPPDATA%\Kuro\n8n_workflows.json` without restarting Kuro, then trigger it by voice.
-4. After each of these, hold Ctrl+Alt+Space again and confirm the hotkey is not stuck busy.
+2. Say `n8n status` after the status workflow is imported and active.
+3. Stop the n8n container. Say the hello workflow again and hear that Kuro cannot reach n8n. Say "desk off" or "what's the news" and confirm those still answer without the LLM.
+4. Add a new entry to `%LOCALAPPDATA%\Kuro\n8n_workflows.json` without restarting Kuro, then trigger it by voice.
+5. After each of these, hold Ctrl+Alt+Space again and confirm Thinking stays until audio starts, then the hotkey is free for the next hold.
+6. Probe without speaking: `.\.venv\Scripts\python.exe .\scripts\_probe_n8n_hello.py` should print `hello_ok True`.

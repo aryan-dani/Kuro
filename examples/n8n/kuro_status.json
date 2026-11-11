@@ -1,0 +1,54 @@
+{
+  "name": "Kuro Status",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kuro-status",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c0ffee00-0000-4000-8000-000000000011",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "webhookId": "kuro-status"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"reply\":\"n8n is online on the hub.\"}",
+        "options": {}
+      },
+      "id": "c0ffee00-0000-4000-8000-000000000012",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [560, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupRequired": true
+  },
+  "pinData": {},
+  "tags": []
+}

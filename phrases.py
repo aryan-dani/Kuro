@@ -130,6 +130,12 @@ def matches(text: str) -> bool:
     t = _normalize(text)
     return any(
         (
+            _is_cancel(t),
+            _is_thanks(t),
+            _is_help(t),
+            _is_identity(t),
+            _is_time(t),
+            _is_date(t),
             _is_pause(t),
             _is_resume(t),
             _is_stop_music(t),
@@ -142,6 +148,7 @@ def matches(text: str) -> bool:
             _is_meet(t),
             _is_whatsapp(t),
             _is_workflow(t),
+            _is_workflow_hint(t),
         )
     )
 
@@ -153,36 +160,62 @@ def try_handle(text: str) -> PhraseResult | None:
     t = _normalize(text)
     logger.info("Phrase normalize: %r -> %r", text, t)
 
+    # Tiny local replies first — never touch hub, n8n, or Ollama.
+    if _is_cancel(t):
+        return PhraseResult("Alright.", force_fast_tts=True)
+
+    if _is_thanks(t):
+        return PhraseResult("Anytime.", force_fast_tts=True)
+
+    if _is_help(t):
+        return PhraseResult(
+            "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. "
+            "Say run hello workflow to test n8n.",
+            force_fast_tts=True,
+        )
+
+    if _is_identity(t):
+        return PhraseResult("Kuro. Local assistant. Phrases first, model last.", force_fast_tts=True)
+
+    if _is_time(t):
+        return PhraseResult(_clock_reply(), force_fast_tts=True)
+
+    if _is_date(t):
+        return PhraseResult(_date_reply(), force_fast_tts=True)
+
     if _is_pause(t):
-        return PhraseResult(music.pause_song())
+        return PhraseResult(music.pause_song(), force_fast_tts=True)
 
     if _is_resume(t):
-        return PhraseResult(music.resume_song())
+        return PhraseResult(music.resume_song(), force_fast_tts=True)
 
     if _is_stop_music(t):
-        return PhraseResult(music.stop_song())
+        return PhraseResult(music.stop_song(), force_fast_tts=True)
 
     if _is_goodnight(t):
         music.stop_song()
-        return PhraseResult(_power("good_night", speak_ok="Desk off. Good night, sir."))
+        return PhraseResult(
+            _power("good_night", speak_ok="Desk off. Good night, sir."),
+            force_fast_tts=True,
+        )
 
     if _is_daddys_home(t):
         started = fire_daddys_home_parallel()
         if not started:
-            return PhraseResult("Already on it, sir.")
-        return PhraseResult("Welcome home, sir.")
+            return PhraseResult("Already on it, sir.", force_fast_tts=True)
+        return PhraseResult("Welcome home, sir.", force_fast_tts=True)
 
     if _is_power_off(t):
         music.stop_song()
-        return PhraseResult(_power("power_off", speak_ok="Desk off."))
+        return PhraseResult(_power("power_off", speak_ok="Desk off."), force_fast_tts=True)
 
     if _is_power_on(t):
-        return PhraseResult(_power("power_on", speak_ok="Desk on."))
+        return PhraseResult(_power("power_on", speak_ok="Desk on."), force_fast_tts=True)
 
     if _is_news(t):
         topic = _news_topic(t)
         raw = tools.execute_tool("get_news", {"topic": topic})
-        return PhraseResult(_news_to_speech(raw))
+        return PhraseResult(_news_to_speech(raw), force_fast_tts=True)
 
     if _is_meet(t):
         return PhraseResult(_meet_reply(t), force_fast_tts=True)
@@ -198,7 +231,105 @@ def try_handle(text: str) -> PhraseResult | None:
     if _is_workflow(t):
         return PhraseResult(_workflow_reply(t), force_fast_tts=True)
 
+    # User clearly asked for a workflow but the name did not match — do not escalate to LLM.
+    if _is_workflow_hint(t):
+        return PhraseResult(
+            "I don't know that workflow. Check the local n8n registry.",
+            force_fast_tts=True,
+        )
+
     return None
+
+
+def _is_cancel(t: str) -> bool:
+    return t in (
+        "cancel",
+        "never mind",
+        "nevermind",
+        "forget it",
+        "stop",
+        "abort",
+    )
+
+
+def _is_thanks(t: str) -> bool:
+    return any(p in t for p in ("thank you", "thanks", "cheers", "appreciate it"))
+
+
+def _is_help(t: str) -> bool:
+    return any(
+        p in t
+        for p in (
+            "what can you do",
+            "help me",
+            "your commands",
+            "what do you support",
+            "list commands",
+            "capabilities",
+        )
+    ) or t in ("help", "commands")
+
+
+def _is_identity(t: str) -> bool:
+    return any(
+        p in t
+        for p in (
+            "who are you",
+            "what are you",
+            "your name",
+            "whats your name",
+        )
+    )
+
+
+def _is_time(t: str) -> bool:
+    if _is_date(t) and "time" not in t:
+        return False
+    return any(
+        p in t
+        for p in (
+            "what time",
+            "whats the time",
+            "current time",
+            "tell me the time",
+            "time is it",
+        )
+    ) or t in ("time", "the time")
+
+
+def _is_date(t: str) -> bool:
+    return any(
+        p in t
+        for p in (
+            "what day",
+            "whats the date",
+            "what date",
+            "todays date",
+            "today's date",
+            "current date",
+            "what is today",
+        )
+    ) or t in ("date", "the date")
+
+
+def _clock_reply() -> str:
+    from datetime import datetime
+
+    now = datetime.now()
+    return now.strftime("It's %I:%M %p.").lstrip("0").replace(" 0", " ")
+
+
+def _date_reply() -> str:
+    from datetime import datetime
+
+    now = datetime.now()
+    return now.strftime("Today is %A, %B %d.").replace(" 0", " ")
+
+
+def _is_workflow_hint(t: str) -> bool:
+    if "n8n" in t or "workflow" in t:
+        return True
+    return "automation" in t and any(v in t for v in ("run", "start", "trigger", "launch"))
 
 
 def _power(scene: str, *, speak_ok: str) -> str:
@@ -242,10 +373,11 @@ def _desk_keywords(t: str) -> bool:
 def _is_pause(t: str) -> bool:
     if "pause" not in t:
         return False
-    return any(w in t for w in ("song", "music", "track", "audio")) or t in (
+    return any(w in t for w in ("song", "music", "track", "audio", "media")) or t in (
         "pause",
         "pause it",
         "pause please",
+        "pause that",
     )
 
 
@@ -260,14 +392,16 @@ def _is_resume(t: str) -> bool:
             "play the song",
             "play music",
             "keep playing",
+            "resume music",
+            "resume song",
         )
     )
 
 
 def _is_stop_music(t: str) -> bool:
-    if not any(w in t for w in ("stop", "close", "shut off", "shut down")):
+    if not any(w in t for w in ("stop", "close", "shut off", "shut down", "kill")):
         return False
-    return any(w in t for w in ("song", "music", "track", "clash"))
+    return any(w in t for w in ("song", "music", "track", "clash", "media"))
 
 
 def _is_goodnight(t: str) -> bool:
@@ -356,8 +490,12 @@ def _is_news(t: str) -> bool:
             "headlines",
             "whats happening",
             "whats the news",
+            "what is the news",
             "brief me",
             "any updates",
+            "latest news",
+            "give me the news",
+            "read the news",
         )
     )
 

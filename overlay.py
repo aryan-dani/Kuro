@@ -76,7 +76,9 @@ class HeadlessOverlay:
             self._state = state
             self._shell = shell
             self._label = (subtitle or shell or "").strip()
-        if hold_ms and hold_ms > 0 and shell != "hidden":
+        # Keep the result pill on screen so the user can open the transcript.
+        # Quiet / short / error holds still expire.
+        if hold_ms and hold_ms > 0 and shell not in ("hidden", "result"):
             def _expire(expected: int = token) -> None:
                 with self._lock:
                     if self._hold_token != expected:
@@ -106,12 +108,24 @@ class HeadlessOverlay:
     def push_level(self, level: float) -> None:
         level = max(0.0, min(1.0, float(level)))
         with self._lock:
-            self._levels.append(level)
-            self._levels = self._levels[-11:]
+            count = len(self._levels)
+            mid = max(1.0, (count - 1) / 2.0)
+            self._level_tick = getattr(self, "_level_tick", 0) + 1
+            tick = self._level_tick
+            for index in range(count):
+                center = 1.0 - (abs(index - mid) / mid)
+                # Center bars lead; outer bars lag a little so speech reads as a shape.
+                lag = 0.55 + (0.35 * center)
+                wobble = 0.04 * math.sin((tick * 0.35) + (index * 0.9))
+                target = level * ((0.28 + (0.72 * center * center)) + wobble)
+                target = max(0.0, min(1.0, target))
+                current = self._levels[index]
+                self._levels[index] = (current * (1.0 - lag)) + (target * lag)
 
     def clear_levels(self) -> None:
         with self._lock:
             self._levels = [0.0] * 11
+            self._level_tick = 0
 
     def set_open_mic(self, on: bool) -> None:
         return None
@@ -130,7 +144,7 @@ def voice_level(samples) -> float:
     """Turn a mic block into a 0..1 bar height. Laptop speech is quiet at full scale."""
     import numpy as np
 
-    audio = np.abs(np.asarray(samples, dtype=np.float32))
+    audio = np.abs(np.asarray(samples, dtype=np.float32).reshape(-1))
     if audio.size == 0:
         return 0.0
     peak = float(np.max(audio))
@@ -138,10 +152,12 @@ def voice_level(samples) -> float:
         audio = audio / 32768.0
         peak = peak / 32768.0
     rms = float(np.sqrt(np.mean(np.square(audio))))
-    raw = max(peak, rms * 3.0)
-    if raw < 0.012:
-        return min(1.0, raw * 2.0)
-    return min(1.0, (raw - 0.012) * 16.0)
+    # Weight RMS more than peak so speech rises smoothly instead of spiking.
+    raw = (rms * 4.2) + (peak * 0.55)
+    if raw < 0.008:
+        return min(1.0, raw * 4.0)
+    shaped = (raw - 0.008) / 0.22
+    return max(0.0, min(1.0, shaped ** 0.72))
 
 
 class OverlayManager:
