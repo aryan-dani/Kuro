@@ -66,7 +66,18 @@ fn main() {
     let repo = kuro_core::repo_root_hint();
     kuro_core::load_env_file(
         &repo.join(".env"),
-        &["KURO_N8N_BASE_URL", "KURO_N8N_TOKEN", "OLLAMA_MODEL", "KURO_PYTHON"],
+        &[
+            "KURO_N8N_BASE_URL",
+            "KURO_N8N_TOKEN",
+            "OLLAMA_MODEL",
+            "KURO_PYTHON",
+            "TUYA_DEVICE_ID",
+            "TUYA_LOCAL_KEY",
+            "TUYA_IP",
+            "TUYA_VERSION",
+            "KURO_TUYA_PYTHON_FALLBACK",
+            "KURO_NEONIZE_DLL",
+        ],
     );
     if std::env::var_os("KURO_N8N_BASE_URL").is_none_or(|v| v.is_empty()) {
         unsafe {
