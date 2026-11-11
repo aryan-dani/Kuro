@@ -52,6 +52,7 @@ function Get-KuroProcesses {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
             ($_.Name -eq "kuro-engine.exe") -or
+            ($_.Name -eq "KuroShell.exe") -or
             (
                 ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
                 $_.CommandLine -and
@@ -59,6 +60,40 @@ function Get-KuroProcesses {
                 ($_.CommandLine -match '(run_kuro|main)\.py')
             )
         }
+}
+
+function Find-KuroShell {
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA "Kuro\shell\KuroShell.exe"),
+        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"),
+        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe")
+    ) | Where-Object { Test-Path -LiteralPath $_ }
+    if (-not $candidates -or $candidates.Count -eq 0) {
+        return $null
+    }
+    return ($candidates | Sort-Object { (Get-Item -LiteralPath $_).LastWriteTime } -Descending | Select-Object -First 1)
+}
+
+function Publish-KuroShell {
+    $built = @(
+        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"),
+        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe")
+    ) | Where-Object { Test-Path -LiteralPath $_ } |
+        Sort-Object { (Get-Item -LiteralPath $_).LastWriteTime } -Descending |
+        Select-Object -First 1
+    if (-not $built) {
+        return
+    }
+    $destDir = Join-Path $env:LOCALAPPDATA "Kuro\shell"
+    try {
+        New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+        $srcDir = Split-Path -Parent $built
+        Copy-Item -LiteralPath (Join-Path $srcDir "*") -Destination $destDir -Recurse -Force
+        Write-KuroLog ("Published KuroShell to {0}" -f (Join-Path $destDir "KuroShell.exe"))
+    }
+    catch {
+        Write-KuroLog ("Publish KuroShell skipped: {0}" -f $_.Exception.Message)
+    }
 }
 
 function Test-KuroMutexHeld {
@@ -160,11 +195,17 @@ function Start-OllamaBackend {
 
 try {
     Start-OllamaBackend
+    Publish-KuroShell
 
     $Engine = Join-Path $KuroRoot "kuro-rs\target\release\kuro-engine.exe"
     if (-not (Test-Path -LiteralPath $Engine)) {
         $Engine = Join-Path $env:LOCALAPPDATA "Kuro\kuro-engine.exe"
     }
+    elseif (Test-Path -LiteralPath $Engine) {
+        $engineDest = Join-Path $env:LOCALAPPDATA "Kuro\kuro-engine.exe"
+        try { Copy-Item -LiteralPath $Engine -Destination $engineDest -Force } catch { }
+    }
+    $Shell = Find-KuroShell
     $UsePython = ($env:KURO_LEGACY_PYTHON -eq "1") -or (-not (Test-Path -LiteralPath $Engine))
     if ($UsePython) {
         if (-not (Test-Path -LiteralPath $MainPy)) {
@@ -183,15 +224,22 @@ try {
         $arg = '"{0}"' -f $MainPy
         Write-KuroLog ("Starting legacy Python Kuro with '{0}'" -f $exe)
     }
+    elseif ($Shell) {
+        $exe = $Shell
+        $arg = ""
+        Write-KuroLog ("Starting KuroShell '{0}' (supervises kuro-engine)" -f $exe)
+    }
     else {
         $exe = $Engine
         $arg = ""
         $env:KURO_API = "on"
         $env:KURO_HUD_SHOW_TEXT = "1"
-        Write-KuroLog ("Starting kuro-engine '{0}'" -f $exe)
+        Write-KuroLog ("Starting kuro-engine '{0}' (no KuroShell build found)" -f $exe)
     }
 
     $existing = @(Get-KuroProcesses)
+    $shellLive = @($existing | Where-Object { $_.Name -eq "KuroShell.exe" }).Count -gt 0
+    $engineLive = @($existing | Where-Object { $_.Name -eq "kuro-engine.exe" }).Count -gt 0
     # The Windows venv launcher (Scripts\pythonw.exe) often keeps a child
     # pythonw from Python311 home. That pair is ONE instance, not a duplicate.
     if ($ForceRestart) {
@@ -199,9 +247,17 @@ try {
         Write-KuroLog ("ForceRestart cleared {0} process(es)" -f $n)
         Start-Sleep -Milliseconds 400
     }
-    elseif ((Test-KuroMutexHeld) -or ($existing.Count -gt 0)) {
+    elseif ($Shell -and $shellLive -and $engineLive) {
+        Write-KuroLog ("Kuro already running (shell+engine) - skip start.")
+        exit 0
+    }
+    elseif (-not $Shell -and ((Test-KuroMutexHeld) -or $engineLive -or ($existing.Count -gt 0))) {
         $pidShown = if ($existing.Count -gt 0) { $existing[0].ProcessId } else { "mutex" }
         Write-KuroLog ("Kuro already running ({0}) - skip start." -f $pidShown)
+        exit 0
+    }
+    elseif ($Shell -and $shellLive -and -not $engineLive) {
+        Write-KuroLog "KuroShell is up but engine is down - leaving shell to relaunch engine."
         exit 0
     }
 
@@ -218,6 +274,9 @@ try {
         else {
             $proc = Start-Process -FilePath $exe -ArgumentList $arg -WorkingDirectory $KuroRoot -WindowStyle Hidden -PassThru
         }
+    }
+    elseif ($Shell) {
+        $proc = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) -PassThru
     }
     elseif ($ShowWindow) {
         $proc = Start-Process -FilePath $exe -WorkingDirectory $KuroRoot -PassThru

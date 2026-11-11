@@ -114,7 +114,7 @@ function Install-KuroTask {
 
     $watchArgs = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $WatchScript
     $watchTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
-    Set-TriggerDelay -Trigger $watchTrigger -Seconds 90
+    Set-TriggerDelay -Trigger $watchTrigger -Seconds 15
     $watchPrincipal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask `
         -TaskName $TaskName `
@@ -122,7 +122,7 @@ function Install-KuroTask {
         -Trigger $watchTrigger `
         -Settings $settings `
         -Principal $watchPrincipal `
-        -Description "Starts the Kuro supervisor 90 seconds after logon. One light instance; GPU warm only in Legion Performance on the real charger." `
+        -Description "Starts the Kuro supervisor 15 seconds after logon (KuroShell + kuro-engine). Keeps one instance alive." `
         -Force | Out-Null
 
     $modeArgs = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $ModeScript
@@ -143,7 +143,7 @@ function Install-KuroTask {
         Unregister-ScheduledTask -TaskName "KuroWifiWatcher" -Confirm:$false
     }
 
-    Write-Host ("Installed {0} (delay 90s) and {1} (delay 30s, highest)" -f $TaskName, $ModeTask)
+    Write-Host ("Installed {0} (delay 15s) and {1} (delay 30s, highest)" -f $TaskName, $ModeTask)
     Write-Host ("  User: {0}" -f $userId)
 }
 
@@ -177,7 +177,7 @@ try {
 
     "OK $(Get-Date -Format o)" | Set-Content -LiteralPath $InstallLog -Encoding ASCII
     Write-Host ""
-    Write-Host "Done. Logon starts one light Kuro. GPU models load only in Legion Performance on the real charger."
+    Write-Host "Done. Logon starts KuroShell (and kuro-engine) automatically."
     Write-Host ("Supervisor log: {0}" -f (Join-Path $LogDir "supervisor.log"))
     Write-Host ("Mode file:      {0}" -f (Join-Path $LogDir "legion_mode.json"))
     Write-Host ("Autostart log:  {0}" -f (Join-Path $LogDir "autostart.log"))

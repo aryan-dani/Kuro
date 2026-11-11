@@ -1,20 +1,21 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Keep exactly one light Kuro running after logon.
+  Keep KuroShell + kuro-engine running after logon.
 
 .DESCRIPTION
-  Does not stop Kuro based on Wi-Fi. A second copy of this script exits immediately.
-  Every poll: if the Kuro mutex is held and the heartbeat is fresh, do nothing.
-  If the process is missing or the heartbeat is stale, kill that tree once and
-  start again through Start-Kuro.ps1. Cooldown avoids a crash stampede.
+  A second copy of this script exits immediately.
+  If nothing is running, start via Start-Kuro.ps1.
+  If KuroShell is up, leave it alone - the shell relaunches a dead engine.
+  Only force-kill+restart when the tree looks wedged (stale heartbeat with
+  processes still listed). Never fight a healthy shell.
 
   %LOCALAPPDATA%\Kuro\DISABLED means do not start.
 #>
 [CmdletBinding()]
 param(
-    [int]$PollSeconds = 60,
-    [int]$HeartbeatStaleSeconds = 90,
+    [int]$PollSeconds = 20,
+    [int]$HeartbeatStaleSeconds = 120,
     [int]$RestartCooldownSeconds = 60
 )
 
@@ -47,10 +48,14 @@ Write-SuperLog ("Supervisor started. Poll={0}s heartbeatStale={1}s" -f $PollSeco
 function Get-KuroProcesses {
     @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
-            ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
-            $_.CommandLine -and
-            ($_.CommandLine -match 'Kuro') -and
-            ($_.CommandLine -match '(run_kuro|main)\.py')
+            ($_.Name -eq "kuro-engine.exe") -or
+            ($_.Name -eq "KuroShell.exe") -or
+            (
+                ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
+                $_.CommandLine -and
+                ($_.CommandLine -match 'Kuro') -and
+                ($_.CommandLine -match '(run_kuro|main)\.py')
+            )
         })
 }
 
@@ -58,12 +63,10 @@ function Test-KuroMutexHeld {
     $m = $null
     try {
         $m = New-Object System.Threading.Mutex($false, $MutexName)
-        $held = $false
         try {
             $got = $m.WaitOne(0)
         }
         catch [System.Threading.AbandonedMutexException] {
-            # Previous owner died. We now own it; release so a real start can take it.
             try { $m.ReleaseMutex() } catch { }
             return $false
         }
@@ -92,8 +95,7 @@ function Get-HeartbeatAgeSeconds {
     }
     catch {
         try {
-            $age = ((Get-Date) - (Get-Item -LiteralPath $HeartbeatFile).LastWriteTime).TotalSeconds
-            return $age
+            return ((Get-Date) - (Get-Item -LiteralPath $HeartbeatFile).LastWriteTime).TotalSeconds
         }
         catch {
             return $null
@@ -104,8 +106,12 @@ function Get-HeartbeatAgeSeconds {
 function Stop-KuroTree {
     $procs = @(Get-KuroProcesses)
     foreach ($p in $procs) {
-        Write-SuperLog ("Stopping Kuro PID={0}" -f $p.ProcessId)
+        Write-SuperLog ("Stopping Kuro PID={0} ({1})" -f $p.ProcessId, $p.Name)
         Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    $lock = Join-Path $LogDir "kuro.lock"
+    if (Test-Path -LiteralPath $lock) {
+        Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
     }
     if ($procs.Count -gt 0) {
         Start-Sleep -Milliseconds 800
@@ -118,43 +124,37 @@ $lastRestart = [datetime]::MinValue
 while ($true) {
     try {
         if (Test-Path -LiteralPath $DisableFlag) {
-            Write-SuperLog "DISABLED flag set — supervisor idle."
+            Write-SuperLog "DISABLED flag set - supervisor idle."
         }
         else {
             $procs = @(Get-KuroProcesses)
+            $shellLive = @($procs | Where-Object { $_.Name -eq "KuroShell.exe" }).Count -gt 0
+            $engineLive = @($procs | Where-Object { $_.Name -eq "kuro-engine.exe" }).Count -gt 0
+            $legacyLive = @($procs | Where-Object { $_.Name -match 'python' }).Count -gt 0
             $mutexHeld = Test-KuroMutexHeld
             $hbAge = Get-HeartbeatAgeSeconds
-            $young = $false
-            foreach ($p in $procs) {
-                try {
-                    $started = $p.CreationDate
-                    if ($started -and (((Get-Date) - $started).TotalSeconds -lt $HeartbeatStaleSeconds)) {
-                        $young = $true
-                    }
-                }
-                catch { }
-            }
+            $heartbeatOk = ($null -ne $hbAge -and $hbAge -ge 0 -and $hbAge -lt $HeartbeatStaleSeconds)
+            $since = ((Get-Date) - $lastRestart).TotalSeconds
 
-            $heartbeatOk = ($null -ne $hbAge -and $hbAge -ge 0 -and $hbAge -lt $HeartbeatStaleSeconds) -or $young
-            $healthy = ($procs.Count -gt 0) -and $mutexHeld -and $heartbeatOk
-
-            if ($healthy) {
-                # venv pythonw + Python311 child is one instance. Leave it alone.
+            if ($shellLive -or ($engineLive -and ($heartbeatOk -or $mutexHeld)) -or ($legacyLive -and $mutexHeld)) {
+                # Shell owns engine recovery. Do not kill a live tree.
             }
-            else {
-                $since = ((Get-Date) - $lastRestart).TotalSeconds
-                if ($since -lt $RestartCooldownSeconds -and $procs.Count -gt 0) {
-                    Write-SuperLog ("Unhealthy but cooldown {0:n0}s — waiting." -f ($RestartCooldownSeconds - $since))
-                }
-                else {
-                    $why = "procs={0} mutex={1} heartbeatAge={2}" -f $procs.Count, $mutexHeld, $hbAge
-                    Write-SuperLog ("Kuro not healthy ({0}). Restarting." -f $why)
-                    if ($procs.Count -gt 0) {
-                        Stop-KuroTree | Out-Null
-                    }
+            elseif ($procs.Count -eq 0) {
+                if ($since -ge $RestartCooldownSeconds) {
+                    Write-SuperLog "Kuro not running. Starting."
                     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript
                     $lastRestart = Get-Date
                 }
+            }
+            elseif (-not $heartbeatOk -and $hbAge -ge ($HeartbeatStaleSeconds * 2) -and $since -ge $RestartCooldownSeconds) {
+                $why = "shell={0} engine={1} mutex={2} heartbeatAge={3}" -f $shellLive, $engineLive, $mutexHeld, $hbAge
+                Write-SuperLog ("Kuro wedged ({0}). Force restart." -f $why)
+                Stop-KuroTree | Out-Null
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript -ForceRestart
+                $lastRestart = Get-Date
+            }
+            else {
+                Write-SuperLog ("Kuro recovering - leave alone (shell={0} engine={1} hb={2})." -f $shellLive, $engineLive, $hbAge)
             }
         }
     }

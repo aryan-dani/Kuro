@@ -247,10 +247,21 @@ public sealed class EngineSupervisor
             Changed?.Invoke();
             var delay = KuroShell.Core.RestartBackoff.NextDelayMs(_failures);
             Thread.Sleep(delay);
-            if (!_stopRequested)
+            if (_stopRequested)
             {
-                Launch();
+                return;
             }
+
+            // Another launcher (watchdog / second shell) may already own the engine.
+            if (MutexExists())
+            {
+                Attached = true;
+                Status = "attached";
+                Changed?.Invoke();
+                return;
+            }
+
+            Launch();
         };
         _failures = 0;
         Attached = false;

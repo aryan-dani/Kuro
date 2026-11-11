@@ -10,6 +10,7 @@ public partial class App : Application, IDisposable
     private string _trayState = "";
     private EngineClient? _client;
     private CancellationTokenSource? _events;
+    private DispatcherTimer? _watchdog;
 
     public static EngineSupervisor Supervisor { get; } = new();
     public static HudWindow Hud { get; private set; } = null!;
@@ -35,6 +36,9 @@ public partial class App : Application, IDisposable
             }
         };
         BuildTray();
+        _watchdog = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        _watchdog.Tick += (_, _) => Supervisor.EnsureRunning();
+        _watchdog.Start();
         _events = new CancellationTokenSource();
         _ = Listen(_events.Token);
     }
@@ -231,6 +235,11 @@ public partial class App : Application, IDisposable
 
     public void Dispose()
     {
+        if (_watchdog is not null)
+        {
+            _watchdog.Stop();
+            _watchdog = null;
+        }
         _events?.Dispose();
         _events = null;
         _tray?.Dispose();
