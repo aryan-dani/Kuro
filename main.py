@@ -491,10 +491,11 @@ def stop_push_to_talk() -> None:
         if overlay_manager:
             overlay_manager.clear_levels()
             overlay_manager.set_transcript(you="", kuro="")
+            # Stay up long enough to open the chat chevron; auto-hides if they do not.
             overlay_manager.set_state(
                 OverlayState.ERROR,
                 subtitle="Mic too quiet",
-                hold_ms=2200,
+                hold_ms=6000,
             )
         if tray_manager:
             tray_manager.set_state(KuroState.IDLE)
@@ -519,7 +520,7 @@ def stop_push_to_talk() -> None:
             overlay_manager.set_state(
                 OverlayState.ERROR,
                 subtitle="Too short — keep holding",
-                hold_ms=2200,
+                hold_ms=6000,
             )
         if tray_manager:
             tray_manager.set_state(KuroState.IDLE)

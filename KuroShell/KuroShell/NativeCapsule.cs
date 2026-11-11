@@ -20,6 +20,8 @@ internal sealed class NativeCapsule
     private const uint WmLbuttonUp = 0x0202;
     private const uint WmSetCursor = 0x0020;
     private const int IdcArrow = 32512;
+    private const int IdcHand = 32649;
+    private const uint WmMousemove = 0x0200;
     private const uint UlwAlpha = 2;
 
     private const int BarCount = 9;
@@ -614,34 +616,58 @@ internal sealed class NativeCapsule
         pixels[i + 3] = 255;
     }
 
+    private bool IsClickableX(int x) => x < _circle;
+
+    private bool IsClickableChevron(int x)
+    {
+        if (!_collapseVisible)
+        {
+            return false;
+        }
+
+        var chevronLeft = _circle + _gap + _capsuleWidth + _gap;
+        return x >= chevronLeft;
+    }
+
     private void OnClick(IntPtr lParam)
     {
         var x = (short)(lParam.ToInt64() & 0xFFFF);
-        if (x < _circle)
+        if (IsClickableX(x))
         {
             DismissRequested?.Invoke();
             return;
         }
 
-        if (_collapseVisible)
+        if (IsClickableChevron(x))
         {
-            var chevronLeft = _circle + _gap + _capsuleWidth + _gap;
-            if (x >= chevronLeft)
-            {
-                CollapseRequested?.Invoke();
-                return;
-            }
+            CollapseRequested?.Invoke();
+            return;
         }
 
-        // Pill body opens the transcript card; stay at the bottom of the screen.
         CapsuleClicked?.Invoke();
+    }
+
+    private void ApplyCursor(int x)
+    {
+        var hand = IsClickableX(x) || IsClickableChevron(x);
+        SetCursor(LoadCursor(IntPtr.Zero, hand ? IdcHand : IdcArrow));
     }
 
     private static IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
+        if (msg == WmMousemove)
+        {
+            var x = (short)(lParam.ToInt64() & 0xFFFF);
+            _live?.ApplyCursor(x);
+            return IntPtr.Zero;
+        }
+
         if (msg == WmSetCursor)
         {
-            SetCursor(LoadCursor(IntPtr.Zero, IdcArrow));
+            var pos = GetMessagePos();
+            var pt = new Point { X = (short)(pos & 0xFFFF), Y = (short)((pos >> 16) & 0xFFFF) };
+            ScreenToClient(hwnd, ref pt);
+            _live?.ApplyCursor(pt.X);
             return new IntPtr(1);
         }
 
@@ -752,6 +778,12 @@ internal sealed class NativeCapsule
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetCursor(IntPtr cursor);
+
+    [DllImport("user32.dll")]
+    private static extern int GetMessagePos();
+
+    [DllImport("user32.dll")]
+    private static extern bool ScreenToClient(IntPtr hwnd, ref Point point);
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr hwnd);

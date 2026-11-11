@@ -34,6 +34,27 @@ internal static class WindowChrome
         SetWindowRgn(hwnd, IntPtr.Zero, true);
     }
 
+    /// <summary>Topmost tool window that can take focus for scroll and text selection.</summary>
+    public static void MakeInteractiveOverlay(IntPtr hwnd)
+    {
+        var style = GetWindowLongPtr(hwnd, GwlExstyle).ToInt64();
+        style |= WsExToolwindow;
+        style &= ~WsExNoactivate;
+        style &= ~WsExTransparent;
+        style &= ~0x00200000;
+        SetWindowLongPtr(hwnd, GwlExstyle, new IntPtr(style));
+    }
+
+    public static void ShowTopmost(IntPtr hwnd, int x, int y, int width, int height, bool activate)
+    {
+        var flags = SwpShowwindow | (activate ? 0u : SwpNoactivate);
+        SetWindowPos(hwnd, HwndTopmost, x, y, width, height, flags);
+        if (activate)
+        {
+            BringWindowToTop(hwnd);
+        }
+    }
+
     public static double DpiScale(IntPtr hwnd)
     {
         var dpi = GetDpiForWindow(hwnd);

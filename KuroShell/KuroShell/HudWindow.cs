@@ -39,9 +39,6 @@ public sealed class HudWindow : Window
     private bool _suppress;
     private bool _dockOpen;
     private bool _animating;
-    private bool _historyOpen;
-    private bool _expandingHistory;
-
     public HudWindow()
     {
         var presenter = OverlappedPresenter.CreateForContextMenu();
@@ -79,11 +76,7 @@ public sealed class HudWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = _turns,
         };
-        _scroll.ViewChanged += (_, _) =>
-        {
-            SyncThumb();
-            MaybeRevealHistory();
-        };
+        _scroll.ViewChanged += (_, _) => SyncThumb();
         _scroll.SizeChanged += (_, _) => SyncThumb();
 
         _thumb = new Border
@@ -168,6 +161,18 @@ public sealed class HudWindow : Window
         }
 
         var wasShown = _shown;
+        // Quiet / empty PTT may ask to hide. If the chat is open for reading, stay put.
+        if (next == "hidden" && _dockOpen && !_suppress)
+        {
+            _state = "result";
+            _native.BottomInset = CapsuleBottomInset;
+            _native.SetMode("result");
+            _native.SetCaption("");
+            UpdateChevron();
+            _native.Paint(_levels);
+            return;
+        }
+
         _state = next;
         _native.BottomInset = CapsuleBottomInset;
         _native.SetMode(_state);
@@ -194,23 +199,29 @@ public sealed class HudWindow : Window
         // Up-chevron appears as soon as Kuro is answering (and stays while a turn exists).
         UpdateChevron();
         _native.Paint(_levels);
-        if (_dockOpen)
-        {
-            PlaceDockAbovePill();
-        }
     }
 
     private void OnThreadChanged()
     {
-        // A new reply resets to the latest exchange until the user scrolls up.
-        _historyOpen = false;
-        RenderDock(scrollToLatest: true);
+        RenderDock(scrollToLatest: !_dockOpen || IsScrolledNearBottom());
         UpdateChevron();
+        if (_dockOpen)
+        {
+            // Re-anchor once when a new turn lands; never every animation frame.
+            PlaceDockAbovePill(activate: false);
+        }
+    }
+
+    private bool IsScrolledNearBottom()
+    {
+        var max = Math.Max(0, _scroll.ScrollableHeight);
+        return max <= 8 || _scroll.VerticalOffset >= max - 48;
     }
 
     private void UpdateChevron()
     {
-        var answering = _state is "speaking" or "result" or "thinking" or "processing";
+        // Quiet / error still offer the chevron when there is something to read.
+        var answering = _state is "speaking" or "result" or "thinking" or "processing" or "error";
         var hasTurn = ConversationLog.Buffer.Turns.Count > 0;
         _native.CollapseVisible = _shown && (answering || hasTurn || _dockOpen);
         _native.CollapsePointsDown = _dockOpen;
@@ -288,11 +299,10 @@ public sealed class HudWindow : Window
             return;
         }
 
-        _historyOpen = false;
         RenderDock(scrollToLatest: true);
         _dockOpen = true;
         UpdateChevron();
-        PlaceDockAbovePill();
+        PlaceDockAbovePill(activate: true);
         AppWindow.Show();
         if (AppWindow.Presenter is OverlappedPresenter live)
         {
@@ -300,9 +310,10 @@ public sealed class HudWindow : Window
         }
 
         var hwnd = WindowNative.GetWindowHandle(this);
-        WindowChrome.MakeOverlay(hwnd);
+        // Must accept focus so scroll and text selection work.
+        WindowChrome.MakeInteractiveOverlay(hwnd);
         ClipCard(hwnd);
-        WindowChrome.ShowTopmost(hwnd, AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height);
+        WindowChrome.ShowTopmost(hwnd, AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height, activate: true);
         AnimateOpen();
         SyncThumb();
     }
@@ -386,7 +397,7 @@ public sealed class HudWindow : Window
         story.Begin();
     }
 
-    private void PlaceDockAbovePill()
+    private void PlaceDockAbovePill(bool activate)
     {
         var hwnd = WindowNative.GetWindowHandle(this);
         var scale = WindowChrome.DpiScale(hwnd);
@@ -409,7 +420,7 @@ public sealed class HudWindow : Window
         AppWindow.Resize(new SizeInt32(pixelsW, pixelsH));
         AppWindow.Move(new PointInt32(x, y));
         ClipCard(hwnd);
-        WindowChrome.ShowTopmost(hwnd, x, y, pixelsW, pixelsH);
+        WindowChrome.ShowTopmost(hwnd, x, y, pixelsW, pixelsH, activate);
     }
 
     private void ClipCard(IntPtr hwnd)
@@ -428,12 +439,9 @@ public sealed class HudWindow : Window
             return;
         }
 
+        // Only repaint the native pill. Re-placing the chat every frame stole focus
+        // and killed scroll / text selection.
         _native.Paint(_levels);
-        if (_dockOpen)
-        {
-            PlaceDockAbovePill();
-            SyncThumb();
-        }
     }
 
     private void SyncThumb()
@@ -473,39 +481,14 @@ public sealed class HudWindow : Window
             return;
         }
 
-        if (_historyOpen)
+        // Full thread is always available; open/new-turn jumps to the latest.
+        // Scrolling up keeps your place and does not rebuild the tree.
+        foreach (var turn in turns)
         {
-            foreach (var turn in turns)
-            {
-                _turns.Children.Add(TurnBlock(turn));
-            }
-        }
-        else
-        {
-            // Latest exchange only. A short pull zone above lets deliberate scroll-up reveal history.
-            if (turns.Count > 1)
-            {
-                _turns.Children.Add(new Border
-                {
-                    Height = 56,
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
-                    Child = new TextBlock
-                    {
-                        Text = "Scroll up for earlier",
-                        FontFamily = new FontFamily(DesignTokens.ChatFace),
-                        FontSize = 12,
-                        Foreground = DesignTokens.ChatMutedBrush,
-                        Opacity = 0.55,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
-                    },
-                });
-            }
-
-            _turns.Children.Add(TurnBlock(turns[^1]));
+            _turns.Children.Add(TurnBlock(turn));
         }
 
-        if (scrollToLatest || !_historyOpen)
+        if (scrollToLatest)
         {
             ScrollToLatest();
         }
@@ -517,28 +500,9 @@ public sealed class HudWindow : Window
     {
         DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
-            _ = _scroll.ChangeView(null, _scroll.ScrollableHeight, null, true);
+            _ = _scroll.ChangeView(null, _scroll.ScrollableHeight, null, false);
             SyncThumb();
         });
-    }
-
-    private void MaybeRevealHistory()
-    {
-        if (_historyOpen || _expandingHistory || ConversationLog.Buffer.Turns.Count <= 1)
-        {
-            return;
-        }
-
-        // Only expand when the user deliberately pulls toward the top of the latest-only view.
-        if (_scroll.VerticalOffset > 12)
-        {
-            return;
-        }
-
-        _expandingHistory = true;
-        _historyOpen = true;
-        RenderDock(scrollToLatest: true);
-        _expandingHistory = false;
     }
 
     private static StackPanel TurnBlock(Turn turn)
