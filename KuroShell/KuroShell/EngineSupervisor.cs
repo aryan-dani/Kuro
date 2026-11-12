@@ -23,7 +23,8 @@ public sealed class EngineSupervisor
         var dir = new DirectoryInfo(start);
         for (var i = 0; i < 10 && dir is not null; i++)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "run_kuro.py")))
+            if (File.Exists(Path.Combine(dir.FullName, "legacy", "python", "run_kuro.py"))
+                || File.Exists(Path.Combine(dir.FullName, "kuro-rs", "Cargo.toml")))
             {
                 return dir.FullName;
             }
@@ -51,7 +52,10 @@ public sealed class EngineSupervisor
     public void StartOrAttach()
     {
         Token = EnsureToken();
-        RepoRoot = FindRepo(AppContext.BaseDirectory) ?? FindRepo(Environment.CurrentDirectory);
+        var envRoot = Environment.GetEnvironmentVariable("KURO_ROOT");
+        RepoRoot = FindRepo(AppContext.BaseDirectory)
+            ?? FindRepo(Environment.CurrentDirectory)
+            ?? (string.IsNullOrWhiteSpace(envRoot) ? null : FindRepo(envRoot));
         if (MutexExists())
         {
             Attached = true;
@@ -124,15 +128,21 @@ public sealed class EngineSupervisor
         return sent;
     }
 
-    public static string? FindEngine(string repoRoot)
+    public static string? FindEngine(string? repoRoot)
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string[] candidates =
-        [
-            Path.Combine(repoRoot, "kuro-rs", "target", "release", "kuro-engine.exe"),
-            Path.Combine(local, "Kuro", "kuro-engine.exe"),
-            Path.Combine(repoRoot, "kuro-rs", "target", "debug", "kuro-engine.exe"),
-        ];
+        var candidates = new List<string>(3);
+        if (!string.IsNullOrWhiteSpace(repoRoot))
+        {
+            candidates.Add(Path.Combine(repoRoot, "kuro-rs", "target", "release", "kuro-engine.exe"));
+        }
+
+        candidates.Add(Path.Combine(local, "Kuro", "kuro-engine.exe"));
+        if (!string.IsNullOrWhiteSpace(repoRoot))
+        {
+            candidates.Add(Path.Combine(repoRoot, "kuro-rs", "target", "debug", "kuro-engine.exe"));
+        }
+
         foreach (var candidate in candidates)
         {
             if (File.Exists(candidate))
@@ -146,29 +156,29 @@ public sealed class EngineSupervisor
 
     private void Launch()
     {
-        if (RepoRoot is null)
+        var legacy = string.Equals(Environment.GetEnvironmentVariable("KURO_LEGACY_PYTHON"), "1", StringComparison.Ordinal);
+        var engine = legacy ? null : FindEngine(RepoRoot);
+        if (RepoRoot is null && engine is null)
         {
             Status = "repo not found";
             Changed?.Invoke();
             return;
         }
 
-        var legacy = string.Equals(Environment.GetEnvironmentVariable("KURO_LEGACY_PYTHON"), "1", StringComparison.Ordinal);
-        var engine = legacy ? null : FindEngine(RepoRoot);
         ProcessStartInfo info;
         if (engine is not null)
         {
             info = new ProcessStartInfo
             {
                 FileName = engine,
-                WorkingDirectory = RepoRoot,
+                WorkingDirectory = RepoRoot ?? Path.GetDirectoryName(engine) ?? Environment.CurrentDirectory,
                 CreateNoWindow = true,
                 UseShellExecute = false,
             };
         }
         else
         {
-            var python = Path.Combine(RepoRoot, ".venv", "Scripts", "python.exe");
+            var python = Path.Combine(RepoRoot!, ".venv", "Scripts", "python.exe");
             if (!File.Exists(python))
             {
                 python = "python";
@@ -177,7 +187,7 @@ public sealed class EngineSupervisor
             info = new ProcessStartInfo
             {
                 FileName = python,
-                Arguments = "run_kuro.py",
+                Arguments = Path.Combine("legacy", "python", "run_kuro.py"),
                 WorkingDirectory = RepoRoot,
                 CreateNoWindow = true,
                 UseShellExecute = false,

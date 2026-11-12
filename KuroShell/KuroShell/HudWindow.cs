@@ -54,7 +54,16 @@ public sealed class HudWindow : Window, IDisposable
             applied.IsAlwaysOnTop = true;
         }
 
-        AppWindow.IsShownInSwitchers = false;
+        try
+        {
+            AppWindow.IsShownInSwitchers = false;
+        }
+        catch (NotImplementedException)
+        {
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+        }
         SystemBackdrop = null;
         Title = "Kuro";
 
@@ -137,7 +146,9 @@ public sealed class HudWindow : Window, IDisposable
         // Pill stays visual-only for listening/speaking; the up-chevron opens and closes chat.
         _native.CapsuleClicked = null;
         _native.CollapseRequested = ToggleDock;
-        _escape = new EscapeHook(() => _shown && _native.Visible, Dismiss);
+        _escape = new EscapeHook(
+            () => _shown && (_dockOpen || _state is "listening" or "thinking" or "processing" or "speaking" or "result" or "error"),
+            Dismiss);
     }
 
     public Action? DismissRequested { get; set; }

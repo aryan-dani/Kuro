@@ -19,6 +19,12 @@ public sealed class StatusDto
     public string? State { get; set; }
     public bool Api { get; set; }
     public string? Logs { get; set; }
+
+    [JsonPropertyName("router_mode")]
+    public string? RouterMode { get; set; }
+
+    [JsonPropertyName("tts_active")]
+    public string? TtsActive { get; set; }
 }
 
 public sealed class ConfigDto
@@ -42,6 +48,12 @@ public sealed class ConfigDto
 
     [JsonPropertyName("plug_id_masked")]
     public string? PlugIdMasked { get; set; }
+
+    [JsonPropertyName("router_mode")]
+    public string? RouterMode { get; set; }
+
+    [JsonPropertyName("tts_active")]
+    public string? TtsActive { get; set; }
 }
 
 public sealed class TimingRow

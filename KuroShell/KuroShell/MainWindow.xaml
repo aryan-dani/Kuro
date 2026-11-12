@@ -188,6 +188,18 @@
                                     </StackPanel>
                                 </Border>
                                 <Border BorderBrush="#141414" BorderThickness="0,1,0,0" Padding="0,14">
+                                    <Grid>
+                                        <TextBlock Text="Router mode" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="RouterModeText" Style="{StaticResource MetaText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="#141414" BorderThickness="0,1,0,0" Padding="0,14">
+                                    <Grid>
+                                        <TextBlock Text="Active voice" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="TtsActiveText" Style="{StaticResource MetaText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="#141414" BorderThickness="0,1,0,0" Padding="0,14">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <Button Content="Restart engine" Style="{StaticResource QuietButton}" Click="OnRestart" />
                                     </StackPanel>

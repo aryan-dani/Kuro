@@ -11,13 +11,16 @@ internal sealed class EscapeHook : IDisposable
 {
     private const int WhKeyboardLl = 13;
     private const int WmKeydown = 0x0100;
+    private const int WmKeyup = 0x0101;
     private const int WmSyskeydown = 0x0104;
+    private const int WmSyskeyup = 0x0105;
     private const int VkEscape = 0x1B;
 
     private readonly Func<bool> _active;
     private readonly Action _onEscape;
     private readonly LowLevelProc _proc;
     private IntPtr _hook;
+    private bool _suppressingEscape;
 
     public EscapeHook(Func<bool> active, Action onEscape)
     {
@@ -46,17 +49,32 @@ internal sealed class EscapeHook : IDisposable
             if (msg is WmKeydown or WmSyskeydown)
             {
                 var info = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
-                if (info.VkCode == VkEscape && _active())
+                if (info.VkCode == VkEscape)
                 {
-                    try
+                    if (_active())
                     {
-                        _onEscape();
-                    }
-                    catch
-                    {
-                        // Never let a dismiss failure wedge the keyboard.
+                        _suppressingEscape = true;
+                        try
+                        {
+                            _onEscape();
+                        }
+                        catch
+                        {
+                            // Never let a dismiss failure wedge the keyboard.
+                        }
+
+                        return (IntPtr)1;
                     }
 
+                    _suppressingEscape = false;
+                }
+            }
+            else if (msg is WmKeyup or WmSyskeyup)
+            {
+                var info = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
+                if (info.VkCode == VkEscape && _suppressingEscape)
+                {
+                    _suppressingEscape = false;
                     return (IntPtr)1;
                 }
             }

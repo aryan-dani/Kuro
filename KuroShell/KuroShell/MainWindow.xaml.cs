@@ -180,7 +180,7 @@ public sealed partial class MainWindow : Window
         {
             VoiceRows.Children.Add(Choice("Language model", "llm_mode", ["off", "fallback", "always"], config));
             VoiceRows.Children.Add(Choice("Speech recognition", "stt_backend", ["auto", "cuda", "npu", "cpu"], config));
-            VoiceRows.Children.Add(Choice("Voice", "tts_engine", ["auto", "xtts", "piper", "pyttsx3"], config));
+            VoiceRows.Children.Add(Choice("Voice", "tts_engine", ["auto", "kokoro", "piper", "xtts", "pyttsx3"], config));
             VoiceRows.Children.Add(LanguageRow(config));
             _voiceReady = true;
             return;
@@ -304,6 +304,10 @@ public sealed partial class MainWindow : Window
         _loading = false;
         var logs = status?.RootElement.TryGetProperty("logs", out var folder) == true ? folder.GetString() : "";
         LogPath.Text = string.IsNullOrEmpty(logs) ? "Log folder unavailable." : logs!;
+        var routerMode = status?.RootElement.TryGetProperty("router_mode", out var rm) == true ? rm.GetString() : "";
+        RouterModeText.Text = string.IsNullOrEmpty(routerMode) ? "unknown" : routerMode!;
+        var ttsActive = status?.RootElement.TryGetProperty("tts_active", out var ta) == true ? ta.GetString() : "";
+        TtsActiveText.Text = string.IsNullOrEmpty(ttsActive) ? "unknown" : ttsActive!;
 
         var flows = await _client.GetAsync("/workflows");
         var names = new List<string>();
