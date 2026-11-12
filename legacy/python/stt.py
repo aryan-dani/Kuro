@@ -30,7 +30,7 @@ _npu_pipe = None
 _cpu_model = None
 _active_backend: str | None = None  # last resolved backend name
 
-_ROOT = Path(__file__).resolve().parent
+_ROOT = config.repo_root()
 _OV_SMALL = _ROOT / "bench" / "models" / "whisper-small.en-int8"
 
 _INITIAL_PROMPT_BASE = (

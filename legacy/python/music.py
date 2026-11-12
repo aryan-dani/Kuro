@@ -49,7 +49,9 @@ def find_local_song() -> Path | None:
         p = Path(env_path)
         if p.is_file():
             return p.resolve()
-    root = Path(__file__).resolve().parent
+    import config as _config
+
+    root = _config.repo_root()
     for folder in (root / "sounds", root / "music", root):
         if not folder.is_dir():
             continue

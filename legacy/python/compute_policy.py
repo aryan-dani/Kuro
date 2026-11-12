@@ -146,7 +146,7 @@ def piper_model_path() -> str | None:
     override = os.getenv("KURO_PIPER_MODEL", "").strip()
     if override and os.path.isfile(override):
         return os.path.abspath(override)
-    root = os.path.dirname(os.path.abspath(__file__))
+    root = str(config.repo_root())
     candidates = [
         os.path.join(root, "bench", "models", "piper", "en_US-lessac-medium.onnx"),
         os.path.join(root, "voices", "en_US-lessac-medium.onnx"),

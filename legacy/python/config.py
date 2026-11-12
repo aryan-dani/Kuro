@@ -1,8 +1,22 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
+
+def repo_root() -> Path:
+    """Kuro repository root (bench/, .env, kuro-rs/)."""
+    env = os.getenv("KURO_ROOT", "").strip()
+    if env:
+        return Path(env)
+    here = Path(__file__).resolve().parent
+    if here.name == "python" and here.parent.name == "legacy":
+        return here.parent.parent
+    return here
+
+
 # Override so .env wins over stale shell env (e.g. old ONLY_WHEN_CHARGING=true).
-load_dotenv(override=True)
+load_dotenv(repo_root() / ".env", override=True)
 
 KURO_HOTKEY = os.getenv("KURO_HOTKEY", "ctrl+alt+space")
 
