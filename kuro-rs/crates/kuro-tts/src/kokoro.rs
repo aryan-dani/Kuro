@@ -203,15 +203,88 @@ fn detect_espeak() -> Option<PathBuf> {
 }
 
 fn espeak_ipa(text: &str) -> Option<String> {
+    use std::io::Write;
+    use std::process::Stdio;
+
     let bin = detect_espeak()?;
-    let out = silent_cmd(&bin).args(["--ipa", "-q", "-v", "en-us", text]).output().ok()?;
-    if out.status.success() {
-        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !s.is_empty() {
-            return Some(s);
-        }
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
     }
-    None
+
+    // Segment text by clause punctuation so we can restore exact pauses for Kokoro.
+    let mut segments: Vec<(String, Option<char>)> = Vec::new();
+    let chars: Vec<char> = text.chars().collect();
+    let mut current = String::new();
+    let mut idx = 0;
+    while idx < chars.len() {
+        let ch = chars[idx];
+        let is_decimal = ch == '.'
+            && idx > 0
+            && idx + 1 < chars.len()
+            && chars[idx - 1].is_ascii_digit()
+            && chars[idx + 1].is_ascii_digit();
+
+        if !is_decimal && matches!(ch, ',' | '.' | '?' | '!' | ';' | ':' | '—' | '…') {
+            let punct = ch;
+            while idx + 1 < chars.len()
+                && matches!(chars[idx + 1], ',' | '.' | '?' | '!' | ';' | ':' | '—' | '…' | '"' | '\'' | '”' | ')')
+            {
+                idx += 1;
+            }
+            let trimmed = current.trim().to_string();
+            if !trimmed.is_empty() {
+                segments.push((trimmed, Some(punct)));
+                current.clear();
+            }
+        } else {
+            current.push(ch);
+        }
+        idx += 1;
+    }
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        segments.push((trimmed, None));
+    }
+
+    if segments.is_empty() {
+        return None;
+    }
+
+    let input = segments.iter().map(|(s, _)| s.as_str()).collect::<Vec<_>>().join("\n");
+
+    let mut cmd = silent_cmd(&bin);
+    cmd.args(["--ipa", "-q", "-v", "en-us"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+
+    let mut child = cmd.spawn().ok()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(input.as_bytes());
+    }
+    let out = child.wait_with_output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+
+    let stdout_str = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout_str.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+
+    if lines.len() == segments.len() {
+        let mut reconstructed = String::new();
+        for (line, (_, punct)) in lines.iter().zip(segments.iter()) {
+            if !reconstructed.is_empty() {
+                reconstructed.push(' ');
+            }
+            reconstructed.push_str(line);
+            if let Some(p) = punct {
+                reconstructed.push(*p);
+            }
+        }
+        return Some(reconstructed);
+    }
+
+    // Fallback: join lines with space if segment count differed
+    let fallback = lines.join(" ");
+    if !fallback.is_empty() { Some(fallback) } else { None }
 }
 
 fn simple_g2p(text: &str) -> String {
@@ -427,6 +500,20 @@ pub fn shutdown() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn espeak_preserves_comma_pause_before_next_word() {
+        let text = "Once upon a time, in...";
+        let ipa = phonemize(text);
+        assert!(ipa.contains(", "), "IPA must retain comma followed by space: {ipa}");
+        let tokens = tokenize_ipa(&ipa);
+        // Find token 3 (comma)
+        let comma_idx = tokens.iter().position(|&t| t == 3).expect("comma token must exist");
+        // Immediately preceding token must be 'm' (token 55 for 'time')
+        assert_eq!(tokens[comma_idx - 1], 55, "token before comma must be 'm'");
+        // Immediately following token must be space (token 16)
+        assert_eq!(tokens[comma_idx + 1], 16, "token after comma must be space");
+    }
 
     #[test]
     fn blend_parses_weights() {
