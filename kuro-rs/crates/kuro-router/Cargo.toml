@@ -11,6 +11,8 @@ kuro-tools = { path = "../kuro-tools" }
 regex = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
+sha2 = { workspace = true }
+ort = { workspace = true }
 
 [dev-dependencies]
 kuro-tools = { path = "../kuro-tools" }

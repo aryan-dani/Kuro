@@ -34,7 +34,7 @@ pub struct ConfigError;
 
 const LLM: &[&str] = &["off", "fallback", "always"];
 const STT: &[&str] = &["auto", "cuda", "npu", "cpu"];
-const TTS: &[&str] = &["auto", "xtts", "piper", "pyttsx3"];
+const TTS: &[&str] = &["auto", "kokoro", "piper", "xtts", "pyttsx3"];
 
 pub fn apply_config(cfg: &mut EngineConfig, payload: &Value) -> Result<(), ConfigError> {
     let obj = payload.as_object().ok_or(ConfigError)?;

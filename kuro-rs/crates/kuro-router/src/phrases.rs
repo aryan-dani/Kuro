@@ -125,73 +125,139 @@ fn try_handle_inner(text: &str) -> Option<PhraseResult> {
         return None;
     }
     let t = normalize(text);
-    let fast = |reply: String| PhraseResult { reply, skip_tts: false, force_fast_tts: true };
-    if is_cancel(&t) {
+    match crate::semantic::route_semantic(&t) {
+        Some(crate::semantic::RouteDecision::Llm) => return None,
+        Some(crate::semantic::RouteDecision::Tool(intent)) => {
+            if let Some(result) = execute_intent(intent, &t) {
+                return Some(result);
+            }
+        }
+        None => {}
+    }
+    legacy_try_handle(&t)
+}
+
+fn fast(reply: String) -> PhraseResult {
+    PhraseResult { reply, skip_tts: false, force_fast_tts: true }
+}
+
+fn execute_intent(intent: crate::semantic::Intent, t: &str) -> Option<PhraseResult> {
+    use crate::semantic::Intent;
+    Some(match intent {
+        Intent::Cancel => fast("Alright.".into()),
+        Intent::Thanks => fast("Anytime.".into()),
+        Intent::Help => fast(
+            "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n.".into(),
+        ),
+        Intent::Identity => fast("Kuro. Local assistant. Phrases first, model last.".into()),
+        Intent::Time => fast(clock_reply()),
+        Intent::Date => fast(date_reply()),
+        Intent::PauseMusic => fast(kuro_tools::music::pause_song()),
+        Intent::ResumeMusic => fast(kuro_tools::music::resume_song()),
+        Intent::StopMusic => fast(kuro_tools::music::stop_song()),
+        Intent::GoodNight => {
+            let _ = kuro_tools::music::stop_song();
+            fast(power("good_night", "Desk off. Good night, sir."))
+        }
+        Intent::DaddyHome => {
+            if !fire_daddys_home() {
+                return Some(fast("Already on it, sir.".into()));
+            }
+            fast("Welcome home, sir.".into())
+        }
+        Intent::PowerOff => {
+            let _ = kuro_tools::music::stop_song();
+            fast(power("power_off", "Desk off."))
+        }
+        Intent::PowerOn => fast(power("power_on", "Desk on.")),
+        Intent::GetNews => {
+            let topic = news_topic(t);
+            let raw = kuro_tools::execute_tool("get_news", &json!({"topic": topic}));
+            fast(news_to_speech(&raw))
+        }
+        Intent::MakeMeet => fast(meet_reply(t)),
+        Intent::CheckInbox => {
+            let mode = inbox_mode(t);
+            let raw = kuro_tools::execute_tool("check_inbox", &json!({"mode": mode}));
+            fast(inbox_to_speech(&raw))
+        }
+        Intent::SendWhatsapp => fast(whatsapp_reply(t)),
+        Intent::RunWorkflow => fast(workflow_reply(t)),
+        Intent::ReadScreen => {
+            let raw = kuro_tools::execute_tool("read_screen", &json!({}));
+            fast(raw)
+        }
+        Intent::ConversationalLlm => return None,
+    })
+}
+
+fn legacy_try_handle(t: &str) -> Option<PhraseResult> {
+    if is_cancel(t) {
         return Some(fast("Alright.".into()));
     }
-    if is_thanks(&t) {
+    if is_thanks(t) {
         return Some(fast("Anytime.".into()));
     }
-    if is_help(&t) {
+    if is_help(t) {
         return Some(fast(
             "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n.".into(),
         ));
     }
-    if is_identity(&t) {
+    if is_identity(t) {
         return Some(fast("Kuro. Local assistant. Phrases first, model last.".into()));
     }
-    if is_time(&t) {
+    if is_time(t) {
         return Some(fast(clock_reply()));
     }
-    if is_date(&t) {
+    if is_date(t) {
         return Some(fast(date_reply()));
     }
-    if is_pause(&t) {
+    if is_pause(t) {
         return Some(fast(kuro_tools::music::pause_song()));
     }
-    if is_resume(&t) {
+    if is_resume(t) {
         return Some(fast(kuro_tools::music::resume_song()));
     }
-    if is_stop_music(&t) {
+    if is_stop_music(t) {
         return Some(fast(kuro_tools::music::stop_song()));
     }
-    if is_goodnight(&t) {
+    if is_goodnight(t) {
         let _ = kuro_tools::music::stop_song();
         return Some(fast(power("good_night", "Desk off. Good night, sir.")));
     }
-    if is_daddys_home(&t) {
+    if is_daddys_home(t) {
         if !fire_daddys_home() {
             return Some(fast("Already on it, sir.".into()));
         }
         return Some(fast("Welcome home, sir.".into()));
     }
-    if is_power_off(&t) {
+    if is_power_off(t) {
         let _ = kuro_tools::music::stop_song();
         return Some(fast(power("power_off", "Desk off.")));
     }
-    if is_power_on(&t) {
+    if is_power_on(t) {
         return Some(fast(power("power_on", "Desk on.")));
     }
-    if is_news(&t) {
-        let topic = news_topic(&t);
+    if is_news(t) {
+        let topic = news_topic(t);
         let raw = kuro_tools::execute_tool("get_news", &json!({"topic": topic}));
         return Some(fast(news_to_speech(&raw)));
     }
-    if is_meet(&t) {
-        return Some(fast(meet_reply(&t)));
+    if is_meet(t) {
+        return Some(fast(meet_reply(t)));
     }
-    if is_inbox(&t) {
-        let mode = inbox_mode(&t);
+    if is_inbox(t) {
+        let mode = inbox_mode(t);
         let raw = kuro_tools::execute_tool("check_inbox", &json!({"mode": mode}));
         return Some(fast(inbox_to_speech(&raw)));
     }
-    if is_whatsapp(&t) {
-        return Some(fast(whatsapp_reply(&t)));
+    if is_whatsapp(t) {
+        return Some(fast(whatsapp_reply(t)));
     }
-    if is_workflow(&t) {
-        return Some(fast(workflow_reply(&t)));
+    if is_workflow(t) {
+        return Some(fast(workflow_reply(t)));
     }
-    if is_workflow_hint(&t) {
+    if is_workflow_hint(t) {
         return Some(fast("I don't know that workflow. Check the local n8n registry.".into()));
     }
     None
@@ -218,11 +284,24 @@ pub fn is_thanks(t: &str) -> bool {
     ["thank you", "thanks", "cheers", "appreciate it"].iter().any(|p| t.contains(p))
 }
 pub fn is_help(t: &str) -> bool {
-    t == "help"
-        || t == "commands"
-        || ["what can you do", "help me", "your commands", "what do you support", "list commands", "capabilities"]
+    // Exact / short help only. Do not substring-match "help me" inside real questions
+    // like "can you help me build an LLM".
+    matches!(
+        t,
+        "help"
+            | "commands"
+            | "help me"
+            | "what can you do"
+            | "your commands"
+            | "what do you support"
+            | "list commands"
+            | "capabilities"
+            | "can you help"
+            | "can you help me"
+    ) || (t.split_whitespace().count() <= 6
+        && ["what can you do", "list commands", "your commands", "what do you support", "capabilities"]
             .iter()
-            .any(|p| t.contains(p))
+            .any(|p| t.contains(p)))
 }
 pub fn is_identity(t: &str) -> bool {
     ["who are you", "what are you", "your name", "whats your name"].iter().any(|p| t.contains(p))
@@ -284,7 +363,17 @@ fn desk_keywords(t: &str) -> bool {
         .iter()
         .any(|w| has_word(t, w))
 }
+fn power_command_shaped(t: &str) -> bool {
+    // Imperative desk control — not "why does my monitor turn off".
+    if crate::semantic::looks_like_question(t) {
+        return false;
+    }
+    true
+}
 pub fn is_power_off(t: &str) -> bool {
+    if !power_command_shaped(t) {
+        return false;
+    }
     if has_word(t, "on") && !has_word(t, "off") {
         return false;
     }
@@ -311,6 +400,9 @@ pub fn is_power_off(t: &str) -> bool {
     t.contains("turn off") || t.contains("switch off")
 }
 pub fn is_power_on(t: &str) -> bool {
+    if !power_command_shaped(t) {
+        return false;
+    }
     if has_word(t, "off") {
         return false;
     }

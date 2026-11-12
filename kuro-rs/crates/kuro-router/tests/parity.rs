@@ -102,3 +102,15 @@ fn prefer_live_phrase() {
     let chosen = kuro_router::prefer_user_text("desk off", "hello there");
     assert_eq!(chosen, "desk off");
 }
+
+#[test]
+fn help_me_inside_a_real_question_is_not_help() {
+    let long = "I wanted to understand how to build a large language model from scratch. Can you help me?";
+    assert!(!matches(long), "{long}");
+    assert!(try_handle(long).is_none());
+    assert!(matches("help"));
+    assert!(matches("help me"));
+    assert!(matches("what can you do"));
+    let help = try_handle("help me").unwrap();
+    assert!(help.reply.contains("Desk"));
+}
