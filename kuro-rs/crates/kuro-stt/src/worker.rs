@@ -104,6 +104,10 @@ fn trim_silence_energy(audio: &[f32]) -> Vec<f32> {
         }
     }
     let Some(first_frame) = first else {
+        let max_amp = audio.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        if max_amp < 0.005 {
+            return Vec::new();
+        }
         return pad_to_min(audio.to_vec(), MIN_SAMPLES);
     };
 

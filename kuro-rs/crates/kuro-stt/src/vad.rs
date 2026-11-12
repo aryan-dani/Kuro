@@ -113,12 +113,12 @@ pub fn trim_silero(audio: &[f32]) -> Option<Vec<f32>> {
         }
     }
     let (Some(f), Some(l)) = (first, last) else {
-        return Some(pad_to_min(audio.to_vec(), MIN_SAMPLES));
+        return None;
     };
     let start = (f * FRAME).saturating_sub(PAD);
     let end = ((l + 1) * FRAME + PAD).min(audio.len());
     if start >= end {
-        return Some(pad_to_min(audio.to_vec(), MIN_SAMPLES));
+        return None;
     }
     Some(pad_to_min(audio[start..end].to_vec(), MIN_SAMPLES))
 }

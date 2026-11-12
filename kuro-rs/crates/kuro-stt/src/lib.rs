@@ -1,5 +1,6 @@
 //! Whisper backend selection, prompt bias, and live-vs-final choice.
 
+pub mod dedup;
 mod vad;
 mod worker;
 
@@ -133,7 +134,8 @@ pub use worker::ggml_path;
 pub fn transcribe_pcm(pcm: &[f32], sample_rate: u32, partial: bool, prompt: &str) -> Result<String, String> {
     let backend = select_backend(&std::env::var("KURO_STT_BACKEND").unwrap_or_else(|_| "auto".into()), query_on_ac());
     let device = if backend == SttBackend::Cuda { "cuda" } else { "cpu" };
-    worker::transcribe(pcm, sample_rate, partial, prompt, device)
+    let raw = worker::transcribe(pcm, sample_rate, partial, prompt, device)?;
+    Ok(dedup::dedup_repeats(&raw))
 }
 
 pub fn prewarm() -> Result<(), String> {
