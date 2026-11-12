@@ -1,5 +1,6 @@
-//! Piper ONNX speech with a clip cache, Windows speech fallback, and a first-audio callback.
+//! Kokoro / Piper speech with clip cache, Windows fallback, and sentence streaming.
 
+mod kokoro;
 mod piper;
 mod sapi;
 
@@ -9,17 +10,67 @@ use std::sync::Once;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TtsKind {
+    Auto,
+    Kokoro,
     Piper,
     Xtts,
     Sapi,
 }
 
+pub fn kokoro_models_present() -> bool {
+    kokoro::ready()
+}
+
 pub fn select_kind(requested: &str) -> TtsKind {
     match requested.trim().to_ascii_lowercase().as_str() {
+        "kokoro" => TtsKind::Kokoro,
+        "piper" => TtsKind::Piper,
         "xtts" => TtsKind::Xtts,
         "pyttsx3" => TtsKind::Sapi,
+        "auto" => {
+            if kokoro::ready() {
+                TtsKind::Kokoro
+            } else if piper::default_model().is_some() {
+                TtsKind::Piper
+            } else {
+                TtsKind::Sapi
+            }
+        }
         _ => TtsKind::Piper,
     }
+}
+
+fn active_kind() -> TtsKind {
+    select_kind(&std::env::var("KURO_TTS_ENGINE").unwrap_or_else(|_| "auto".into()))
+}
+
+pub fn active_engine_name(requested: &str) -> &'static str {
+    match select_kind(requested) {
+        TtsKind::Kokoro | TtsKind::Auto => {
+            if kokoro::ready() {
+                "kokoro"
+            } else if piper::default_model().is_some() {
+                "piper"
+            } else {
+                "sapi"
+            }
+        }
+        TtsKind::Piper | TtsKind::Xtts => {
+            if piper::default_model().is_some() {
+                "piper"
+            } else {
+                "sapi"
+            }
+        }
+        TtsKind::Sapi => "sapi",
+    }
+}
+
+pub fn prewarm() -> Result<(), String> {
+    if matches!(active_kind(), TtsKind::Kokoro | TtsKind::Auto) && kokoro::ready() {
+        kokoro::prewarm()?;
+    }
+    Ok(())
 }
 
 const BOOT_PHRASES: &[&str] = &[
@@ -78,7 +129,9 @@ fn store_disk_pcm(text: &str, pcm: &[f32]) {
 }
 
 pub fn shutdown_worker() {
+    kokoro::shutdown();
     piper::shutdown();
+    kuro_core::ort_env::shutdown();
 }
 
 pub fn prebuild_phrase_cache() {
@@ -88,7 +141,8 @@ pub fn prebuild_phrase_cache() {
             if load_disk_pcm(phrase).is_some() {
                 continue;
             }
-            if let Some(pcm) = piper::synthesize(phrase) {
+            let pcm = synthesize(phrase);
+            if !pcm.is_empty() {
                 store_disk_pcm(phrase, &pcm);
             }
         }
@@ -132,7 +186,16 @@ impl Speaker {
         if key.is_empty() || !live() {
             return false;
         }
-        if !self.cache.contains_key(key) {
+        if self.cache.contains_key(key) {
+            if !live() {
+                return false;
+            }
+            let pcm = self.cache.get(key).cloned().unwrap_or_default();
+            return self.play_cached(key, &pcm, &live, &mut on_audio_start);
+        }
+
+        let sentences = split_sentences(key);
+        if sentences.len() <= 1 {
             let pcm = if let Some(disk) = load_disk_pcm(key) {
                 disk
             } else {
@@ -146,25 +209,127 @@ impl Speaker {
                 return false;
             }
             self.synth_calls += 1;
-            self.cache.insert(key.to_string(), pcm);
+            self.cache.insert(key.to_string(), pcm.clone());
+            return self.play_cached(key, &pcm, &live, &mut on_audio_start);
         }
-        if !live() {
+
+        self.synth_calls += 1;
+        let mut assembled = Vec::new();
+        let mut prefetch: Option<std::thread::JoinHandle<Vec<f32>>> = None;
+        let mut started_audio = false;
+        for (idx, sent) in sentences.iter().enumerate() {
+            if !live() {
+                return false;
+            }
+            let pcm =
+                if let Some(handle) = prefetch.take() { handle.join().unwrap_or_default() } else { synthesize(sent) };
+            if idx + 1 < sentences.len() {
+                let next = sentences[idx + 1].clone();
+                prefetch = Some(std::thread::spawn(move || synthesize(&next)));
+            }
+            if pcm.is_empty() {
+                continue;
+            }
+            assembled.extend_from_slice(&pcm);
+            if std::env::var("KURO_TTS_PLAY").ok().as_deref() == Some("1") {
+                let mut hook = || {
+                    if !started_audio {
+                        started_audio = true;
+                        on_audio_start();
+                    }
+                };
+                if play_pcm_live(&pcm, &live, &mut hook).is_err() {
+                    return false;
+                }
+            } else if !started_audio {
+                started_audio = true;
+                on_audio_start();
+            }
+        }
+        if assembled.is_empty() {
             return false;
         }
-        let pcm = self.cache.get(key).cloned().unwrap_or_default();
+        store_disk_pcm(key, &assembled);
+        self.cache.insert(key.to_string(), assembled);
+        started_audio
+    }
+
+    fn play_cached<L, F>(&self, _key: &str, pcm: &[f32], live: &L, on_audio_start: &mut F) -> bool
+    where
+        L: Fn() -> bool,
+        F: FnMut(),
+    {
         if std::env::var("KURO_TTS_PLAY").ok().as_deref() == Some("1") {
-            return play_pcm_live(&pcm, &live, &mut on_audio_start).is_ok();
+            return play_pcm_live(pcm, live, on_audio_start).is_ok();
         }
         on_audio_start();
         true
     }
 }
 
-pub fn synthesize(text: &str) -> Vec<f32> {
-    if let Some(pcm) = piper::synthesize(text) {
-        return pcm;
+fn split_sentences(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0usize;
+    while i < chars.len() {
+        if matches!(chars[i], '.' | '?' | '!') && i + 1 < chars.len() && chars[i + 1] == ' ' {
+            let sentence: String = chars[start..=i].iter().collect();
+            let trimmed = sentence.trim();
+            if !trimmed.is_empty() {
+                out.push(trimmed.to_string());
+            }
+            start = i + 2;
+            i += 2;
+            continue;
+        }
+        i += 1;
     }
-    sapi::synthesize(text).unwrap_or_default()
+    let tail: String = chars[start..].iter().collect();
+    let trimmed = tail.trim();
+    if !trimmed.is_empty() {
+        out.push(trimmed.to_string());
+    }
+    if out.is_empty() && !text.trim().is_empty() {
+        out.push(text.trim().to_string());
+    }
+    if let Some(first) = out.first().cloned()
+        && let Some((head, tail)) = kokoro::split_first_clause(&first)
+    {
+        out[0] = head;
+        out.insert(1, tail);
+    }
+    out
+}
+
+pub fn synthesize(text: &str) -> Vec<f32> {
+    match active_kind() {
+        TtsKind::Sapi => sapi::synthesize(text).unwrap_or_default(),
+        TtsKind::Kokoro => {
+            if let Some(pcm) = kokoro::synthesize(text) {
+                return pcm;
+            }
+            if let Some(pcm) = piper::synthesize(text) {
+                return pcm;
+            }
+            sapi::synthesize(text).unwrap_or_default()
+        }
+        TtsKind::Auto => {
+            if let Some(pcm) = kokoro::synthesize(text) {
+                return pcm;
+            }
+            if let Some(pcm) = piper::synthesize(text) {
+                return pcm;
+            }
+            sapi::synthesize(text).unwrap_or_default()
+        }
+        TtsKind::Piper | TtsKind::Xtts => {
+            if let Some(pcm) = piper::synthesize(text) {
+                return pcm;
+            }
+            sapi::synthesize(text).unwrap_or_default()
+        }
+    }
 }
 
 fn play_pcm_live<L, F>(pcm: &[f32], live: &L, on_audio_start: &mut F) -> Result<(), String>
@@ -205,9 +370,12 @@ pub fn speak_sapi(text: &str) -> Result<(), String> {
     let script = format!(
         "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak({text:?})"
     );
-    let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .status()
-        .map_err(|err| err.to_string())?;
+    let mut cmd = std::process::Command::new("powershell");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let status = cmd.args(["-NoProfile", "-Command", &script]).status().map_err(|err| err.to_string())?;
     if status.success() { Ok(()) } else { Err("Windows speech failed.".into()) }
 }

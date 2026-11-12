@@ -7,10 +7,11 @@ publish.workspace = true
 
 [dependencies]
 kuro-core = { path = "../kuro-core" }
+ort = { workspace = true }
 rodio = { workspace = true }
 serde_json = { workspace = true }
 windows = { workspace = true }
 windows-sys = { workspace = true, features = ["Win32_System_Pipes", "Win32_Foundation"] }
+
 [lints]
 workspace = true
-

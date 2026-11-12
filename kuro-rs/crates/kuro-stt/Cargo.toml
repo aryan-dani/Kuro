@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 kuro-core = { path = "../kuro-core" }
+ort = { workspace = true }
 serde_json = { workspace = true }
 windows-sys = { workspace = true }
 whisper-rs = { workspace = true }

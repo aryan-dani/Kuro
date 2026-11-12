@@ -1,5 +1,6 @@
 //! Whisper backend selection, prompt bias, and live-vs-final choice.
 
+mod vad;
 mod worker;
 
 use std::path::{Path, PathBuf};

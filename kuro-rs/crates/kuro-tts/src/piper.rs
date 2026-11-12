@@ -6,6 +6,9 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 struct PiperChild {
     child: Child,
     stdin: ChildStdin,
@@ -15,11 +18,40 @@ struct PiperChild {
 static PIPER: Mutex<Option<PiperChild>> = Mutex::new(None);
 
 pub fn default_model() -> Option<PathBuf> {
-    if let Ok(path) = std::env::var("KURO_PIPER_MODEL") {
-        let path = PathBuf::from(path.trim());
-        if path.is_file() {
-            return Some(path);
+    if let Ok(raw) = std::env::var("KURO_PIPER_MODEL") {
+        let p = PathBuf::from(raw.trim());
+        if p.is_file() {
+            return Some(p);
         }
+        let repo = kuro_core::repo_root_hint();
+        if repo.join(&p).is_file() {
+            return Some(repo.join(&p));
+        }
+        if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+            && let Some(fname) = p.file_name()
+        {
+            let candidate = local.join("Kuro").join("models").join("piper").join(fname);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        let in_spicor = local.join("Kuro").join("models").join("piper").join("en_IN-spicor-medium.onnx");
+        if in_spicor.is_file() {
+            return Some(in_spicor);
+        }
+    }
+    let bundled_in = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("..")
+        .join("bench")
+        .join("models")
+        .join("piper")
+        .join("en_IN-spicor-medium.onnx");
+    if bundled_in.is_file() {
+        return Some(bundled_in);
     }
     let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -74,6 +106,8 @@ fn spawn_piper() -> Option<PiperChild> {
     let exe = piper_exe()?;
     let model = default_model()?;
     let mut command = Command::new(&exe);
+    #[cfg(windows)]
+    command.creation_flags(0x08000000);
     command
         .arg("--model")
         .arg(&model)

@@ -1,8 +1,10 @@
-use kuro_tts::{Speaker, TtsKind, select_kind};
+use kuro_tts::{Speaker, TtsKind, kokoro_models_present, select_kind};
 
 #[test]
 fn auto_and_piper_share_the_native_engine() {
-    assert_eq!(select_kind("auto"), TtsKind::Piper);
+    let auto = if kokoro_models_present() { TtsKind::Kokoro } else { TtsKind::Piper };
+    assert_eq!(select_kind("auto"), auto);
+    assert_eq!(select_kind("kokoro"), TtsKind::Kokoro);
     assert_eq!(select_kind("piper"), TtsKind::Piper);
     assert_eq!(select_kind("pyttsx3"), TtsKind::Sapi);
     assert_eq!(select_kind("xtts"), TtsKind::Xtts);

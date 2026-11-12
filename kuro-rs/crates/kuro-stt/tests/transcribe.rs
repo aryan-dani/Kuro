@@ -55,7 +55,15 @@ fn spoken_wav_returns_a_real_transcript() {
     }
     let (rate, pcm) = speak_wav("hello").expect("windows speech");
     assert!(pcm.len() > 1000, "speech clip too short");
-    let text = transcribe_pcm(&pcm, rate, false, &initial_prompt(&[], &[])).expect("whisper");
+    let prompt = initial_prompt(&[], &[]);
+    eprintln!("pcm_len={} rate={}", pcm.len(), rate);
+    let start = std::time::Instant::now();
+    let _ = transcribe_pcm(&pcm, rate, false, &prompt).expect("whisper warm");
+    let cold_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let start = std::time::Instant::now();
+    let text = transcribe_pcm(&pcm, rate, false, &prompt).expect("whisper");
+    let warm_ms = start.elapsed().as_secs_f64() * 1000.0;
+    eprintln!("cold_stt_ms={cold_ms:.1} warm_stt_ms={warm_ms:.1}");
     let lower = text.to_lowercase();
     assert!(lower.contains("hello"), "transcript was {text:?}");
 }
