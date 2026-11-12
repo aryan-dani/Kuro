@@ -75,7 +75,7 @@ Invoke-Stage "3 cargo fmt + clippy" {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        Push-Location $Root
+        Push-Location (Join-Path $Root "kuro-rs")
         cargo fmt --manifest-path $Manifest --all -- --check 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "fmt check failed" }
         cargo clippy --manifest-path $Manifest --workspace --all-targets -- -D warnings 2>&1 | Out-Null
@@ -91,7 +91,7 @@ Invoke-Stage "4 cargo test" {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        Push-Location $Root
+        Push-Location (Join-Path $Root "kuro-rs")
         $log = Join-Path $env:TEMP ("kuro-gate-cargo-test-{0}.log" -f [guid]::NewGuid().ToString("N"))
         cargo test --manifest-path $Manifest --workspace -- --nocapture *> $log
         $code = $LASTEXITCODE
@@ -127,15 +127,21 @@ Invoke-Stage "6 pytest" {
         Write-Host "  (skip: no .venv)"
         return
     }
-    & $VenvPy -m pytest (Join-Path $Root "tests") -q 2>&1 | Out-Null
+    & $VenvPy -m pytest (Join-Path $Root "legacy\python\tests") -q 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "pytest failed" }
 }
 
 Invoke-Stage "7 live smoke kuro-engine" {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    cargo build --manifest-path $Manifest --release -p kuro-engine 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "engine build failed" }
+    Push-Location (Join-Path $Root "kuro-rs")
+    try {
+        cargo build --manifest-path $Manifest --release -p kuro-engine 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "engine build failed" }
+    }
+    finally {
+        Pop-Location
+    }
     $ErrorActionPreference = $prevEap
     $data = Join-Path $env:TEMP ("Kuro-gate-{0}" -f [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Force -Path $data | Out-Null

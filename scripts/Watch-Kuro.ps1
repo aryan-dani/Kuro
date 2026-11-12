@@ -21,6 +21,21 @@ param(
 
 $ErrorActionPreference = "Continue"
 
+if (-not ("KuroWatchHider" -as [type])) {
+    try {
+        Add-Type -Name KuroWatchHider -Namespace KuroWinAPI -MemberDefinition '
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+' -ErrorAction SilentlyContinue
+    } catch { }
+}
+try {
+    $hwnd = [KuroWinAPI.KuroWatchHider]::GetConsoleWindow()
+    if ($hwnd -ne [IntPtr]::Zero) {
+        [KuroWinAPI.KuroWatchHider]::ShowWindow($hwnd, 0)
+    }
+} catch { }
+
 $StartScript = Join-Path $PSScriptRoot "Start-Kuro.ps1"
 $LogDir = Join-Path $env:LOCALAPPDATA "Kuro"
 $LogFile = Join-Path $LogDir "supervisor.log"
@@ -142,7 +157,7 @@ while ($true) {
             elseif ($procs.Count -eq 0) {
                 if ($since -ge $RestartCooldownSeconds) {
                     Write-SuperLog "Kuro not running. Starting."
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript
+                    Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`"" -WindowStyle Hidden
                     $lastRestart = Get-Date
                 }
             }
@@ -150,7 +165,7 @@ while ($true) {
                 $why = "shell={0} engine={1} mutex={2} heartbeatAge={3}" -f $shellLive, $engineLive, $mutexHeld, $hbAge
                 Write-SuperLog ("Kuro wedged ({0}). Force restart." -f $why)
                 Stop-KuroTree | Out-Null
-                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript -ForceRestart
+                Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`" -ForceRestart" -WindowStyle Hidden
                 $lastRestart = Get-Date
             }
             else {

@@ -15,6 +15,8 @@ from pathlib import Path
 os.environ["KURO_TIMING"] = "1"
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT / "legacy" / "python") not in sys.path:
+    sys.path.insert(0, str(ROOT / "legacy" / "python"))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

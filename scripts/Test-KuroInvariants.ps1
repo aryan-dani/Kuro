@@ -127,6 +127,30 @@ foreach ($file in $shellSources) {
     }
 }
 
+$allowedPyPatterns = @(
+    '(^|[\\/])legacy[\\/]python[\\/]',
+    '(^|[\\/])scripts[\\/]bench[\\/]',
+    '(^|[\\/])scripts[\\/]setup_autostart\.py$',
+    '(^|[\\/])scripts[\\/]build_icons\.py$'
+)
+foreach ($rel in Get-TrackedAndStagedFiles) {
+    if ($rel -notmatch '\.py$') { continue }
+    $allowed = $false
+    foreach ($pat in $allowedPyPatterns) {
+        if ($rel -match $pat) { $allowed = $true; break }
+    }
+    if (-not $allowed) {
+        Add-Fail "Python outside legacy/python quarantine: $rel"
+    }
+}
+if (Test-Path -LiteralPath (Join-Path $Root "tests")) {
+  $rootTests = Get-ChildItem -Path (Join-Path $Root "tests") -File -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { $_.Extension -eq '.py' }
+  if ($rootTests) {
+      Add-Fail "tests/ still contains Python at repo root (use legacy/python/tests)"
+  }
+}
+
 if ($failures.Count -gt 0) {
     Write-Host "[FAIL] Test-KuroInvariants ($($failures.Count) issues)"
     foreach ($item in $failures) { Write-Host "  $item" }

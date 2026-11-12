@@ -17,9 +17,9 @@ $ErrorActionPreference = "Stop"
 $KuroRoot = Split-Path -Parent $PSScriptRoot
 $Pythonw  = Join-Path $KuroRoot ".venv\Scripts\pythonw.exe"
 $Python   = Join-Path $KuroRoot ".venv\Scripts\python.exe"
-$MainPy   = Join-Path $KuroRoot "run_kuro.py"
+$MainPy   = Join-Path $KuroRoot "legacy\python\run_kuro.py"
 if (-not (Test-Path -LiteralPath $MainPy)) {
-    $MainPy = Join-Path $KuroRoot "main.py"
+    $MainPy = Join-Path $KuroRoot "legacy\python\main.py"
 }
 
 $LogDir   = Join-Path $env:LOCALAPPDATA "Kuro"
@@ -64,24 +64,18 @@ function Get-KuroProcesses {
 
 function Find-KuroShell {
     $candidates = @(
-        (Join-Path $env:LOCALAPPDATA "Kuro\shell\KuroShell.exe"),
         (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"),
-        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe")
+        (Join-Path $env:LOCALAPPDATA "Kuro\shell\KuroShell.exe")
     ) | Where-Object { Test-Path -LiteralPath $_ }
     if (-not $candidates -or $candidates.Count -eq 0) {
         return $null
     }
-    return ($candidates | Sort-Object { (Get-Item -LiteralPath $_).LastWriteTime } -Descending | Select-Object -First 1)
+    return $candidates[0]
 }
 
 function Publish-KuroShell {
-    $built = @(
-        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"),
-        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe")
-    ) | Where-Object { Test-Path -LiteralPath $_ } |
-        Sort-Object { (Get-Item -LiteralPath $_).LastWriteTime } -Descending |
-        Select-Object -First 1
-    if (-not $built) {
+    $built = Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"
+    if (-not (Test-Path -LiteralPath $built)) {
         return
     }
     $destDir = Join-Path $env:LOCALAPPDATA "Kuro\shell"
@@ -128,6 +122,10 @@ function Stop-KuroProcesses {
     foreach ($p in $procs) {
         Write-KuroLog ("Stopping duplicate Kuro PID={0}" -f $p.ProcessId)
         Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    $lock = Join-Path $LogDir "kuro.lock"
+    if (Test-Path -LiteralPath $lock) {
+        Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
     }
     if ($procs.Count -gt 0) {
         Start-Sleep -Milliseconds 800
@@ -189,8 +187,17 @@ function Start-OllamaBackend {
     }
     catch { }
 
-    # Never preload an Ollama model at logon. That pins VRAM before Kuro is asked to talk.
-    Write-KuroLog ("Ollama serve ready; model warm skipped (KURO_LLM_MODE={0})" -f $llmMode)
+    # Prewarm model into GPU VRAM asynchronously without spawning any child process
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("Content-Type", "application/json")
+        $body = '{"model":"' + $model + '","keep_alive":"60m"}'
+        $wc.UploadStringAsync((New-Object System.Uri("http://127.0.0.1:11434/api/generate")), "POST", $body)
+        Write-KuroLog ("Ollama serve ready; async model warm sent for {0}" -f $model)
+    }
+    catch {
+        Write-KuroLog ("Model warm request skipped: {0}" -f $_.Exception.Message)
+    }
 }
 
 try {

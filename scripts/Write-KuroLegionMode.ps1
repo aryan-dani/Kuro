@@ -17,6 +17,21 @@ param(
 
 $ErrorActionPreference = "Continue"
 
+if (-not ("KuroConsoleHider" -as [type])) {
+    try {
+        Add-Type -Name KuroConsoleHider -Namespace KuroWinAPI -MemberDefinition '
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+' -ErrorAction SilentlyContinue
+    } catch { }
+}
+try {
+    $hwnd = [KuroWinAPI.KuroConsoleHider]::GetConsoleWindow()
+    if ($hwnd -ne [IntPtr]::Zero) {
+        [KuroWinAPI.KuroConsoleHider]::ShowWindow($hwnd, 0)
+    }
+} catch { }
+
 $LogDir = Join-Path $env:LOCALAPPDATA "Kuro"
 $OutFile = Join-Path $LogDir "legion_mode.json"
 $LogFile = Join-Path $LogDir "legion-mode.log"

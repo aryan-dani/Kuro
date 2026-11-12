@@ -36,7 +36,7 @@ function Stop-KuroBuildLocks {
             ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
             $_.CommandLine -and
             ($_.CommandLine -match 'Kuro') -and
-            ($_.CommandLine -match '(run_kuro|main)\.py|whisper_worker\.py')
+            ($_.CommandLine -match '(run_kuro|main)\.py')
         })
     foreach ($proc in $python) {
         Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
@@ -104,8 +104,14 @@ if ($userLlvm -ne $env:LIBCLANG_PATH) {
 }
 
 Write-Host "Building kuro-engine (release)"
-cargo build --manifest-path $Manifest --release -p kuro-engine
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Push-Location (Join-Path $Root "kuro-rs")
+try {
+    cargo build --manifest-path $Manifest --release -p kuro-engine
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+finally {
+    Pop-Location
+}
 
 $Built = $EngineOut
 $DestDir = Join-Path $env:LOCALAPPDATA "Kuro"

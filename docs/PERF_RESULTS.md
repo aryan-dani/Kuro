@@ -82,3 +82,40 @@ In-process Meet, WhatsApp (neonize DLL), and Tuya framing. No `python.exe` tool 
 
 Python import tax removed from the tool path (903 / 590 / 1242 ms cold imports no longer run). Meet wall clock stays network-bound (~5 s here) and is no longer a new interpreter per call.
 
+## Semantic router, Kokoro, hot path (12 Nov 2026)
+
+Scaffold landed; models were still optional at that point.
+
+## Live ONNX close-out (12 Nov 2026)
+
+Models on disk under `bench/models/{router-embed,kokoro,silero-vad}` (mirrored to `%LOCALAPPDATA%\Kuro\models\…`). Direct `ort` 2.0.0-rc.15 (shared `Environment` + CPU arena). No `kokoro-en`.
+
+| Metric | Value | Note |
+| --- | --- | --- |
+| Router ONNX forward (bge-small WordPiece + mean-pool) | **12.103 ms** | release, warm session, 30 iters avg |
+| AVX2/FMA hand-written 384-d dot | **0.62 ns** (0.0006 µs) | release, 500k iters; `cosine_similarity_384` |
+| Kokoro-82M `af_heart` first-audio (uncached) | **1314.77 ms** | release, direct ort + G2P, "Desk on." |
+| Kokoro second uncached sentence | **301.51 ms** | same session, "Alright." |
+| Ritual clip cache path | memory/disk hit | `Speaker` + `tts_cache` after `prebuild_phrase_cache` / prior synth |
+| Warm STT (whisper-rs, spoken WAV, beam=1) | **17622.6 ms** | release test on this host (pcm≈1.3 s @22.05 kHz); Silero optional via `KURO_DISABLE_SILERO`; prior engine path was ~1765 ms |
+| Peak WS with Whisper+Kokoro+router mapped | **705.7 MB** | unload integration test |
+| WS after dormant unload + `EmptyWorkingSet` | **0.2 MB** | `< 15.0 MB` required; pages fault back on next use |
+| Idle engine WS (API, no warm) | ~14 MB | gate smoke style |
+| Python layout | quarantined | `legacy/python/` only |
+
+Download helpers: `scripts/Download-RouterEmbed.ps1`, `Download-KokoroModel.ps1`, `Download-SileroVad.ps1`. Measure: `scripts/Measure-KuroOnnx.ps1`.
+
+
+## Surgical latency fixes (12 Nov 2026)
+
+Fixes applied: `kuro-stt` reuses `WhisperState`, scales `audio_ctx` dynamically to the trimmed clip, uses greedy decoding with `temperature_inc=0.0`, and compiles `ggml` with MSVC `/O2 /arch:AVX2 /fp:fast`; `kuro-router` uses dynamic sequence length `[1, seq_len]` with a 4-token init warm-up and 4 intra-op threads; `kuro-tts` warms up the Kokoro `ort` session on init, caches voice style rows and `espeak` lookup, and splits opening clauses > 40 chars when streaming.
+
+| Metric | Before | After | Note |
+| --- | ---: | ---: | --- |
+| Router ONNX forward (dynamic `seq_len`, warm session) | 12.103 ms | **2.371 ms** | release, 30 iters avg (`onnx_bench`) |
+| AVX2/FMA 384-d dot | 0.62 ns | **0.53 ns** | release, 500k iters (`0.0005 us`) |
+| Kokoro-82M `af_heart` first-audio (after init warm-up) | 1314.77 ms | **200.39 ms** | release, "Desk on."; init+warm-up 875.63 ms once |
+| Kokoro second uncached sentence | 301.51 ms | **198.09 ms** | same session, "Alright." |
+| Ritual clip cache path | memory/disk hit | **memory/disk hit** | `Speaker` + `tts_cache` (0 synth calls on repeat) |
+| Warm STT (`whisper-rs`, AVX2 `ggml`, reused state, dynamic `audio_ctx`) | 17622.6 ms | **349.1 ms** | release (`cold_stt_ms=954.5`), spoken "hello" WAV |
+| Peak mapped WS -> after dormant unload | 705.7 -> 0.2 MB | **792.0 -> 0.2 MB** | `unload_working_set` release (`< 15.0 MB` required) |
