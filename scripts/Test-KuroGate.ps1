@@ -62,6 +62,13 @@ function Invoke-Stage {
 
 Ensure-LibClang
 
+$wasRunning = @(Get-Process -Name KuroShell, kuro-engine -ErrorAction SilentlyContinue).Count -gt 0
+$buildFlag = Join-Path $env:LOCALAPPDATA "Kuro\BUILDING"
+try {
+    New-Item -ItemType File -Force -Path $buildFlag | Out-Null
+} catch { }
+
+try {
 Invoke-Stage "1 Process lock clean" {
     Stop-LockingKuro
 }
@@ -182,4 +189,18 @@ Invoke-Stage "7 live smoke kuro-engine" {
 }
 
 Write-Host "[PASS] Test-KuroGate (all stages)"
+}
+finally {
+    Remove-Item -LiteralPath $buildFlag -Force -ErrorAction SilentlyContinue
+    if ($wasRunning -or (-not $env:CI -and -not (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "Kuro\DISABLED")))) {
+        Write-Host "Restarting Kuro service after gate pass..."
+        try {
+            & (Join-Path $PSScriptRoot "Start-Kuro.ps1")
+        }
+        catch {
+            Write-Warning "Could not restart Kuro: $($_.Exception.Message)"
+        }
+    }
+}
+
 exit 0

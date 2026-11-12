@@ -29,6 +29,7 @@ function Test-FileWritable {
 }
 
 function Stop-KuroBuildLocks {
+    $script:wasRunning = @(Get-Process -Name KuroShell, kuro-engine -ErrorAction SilentlyContinue).Count -gt 0
     Get-Process -Name KuroShell, kuro-engine -ErrorAction SilentlyContinue |
         Stop-Process -Force -ErrorAction SilentlyContinue
     $python = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
@@ -69,6 +70,12 @@ function Ensure-WhisperGgml {
     Invoke-WebRequest -Uri $url -OutFile $ggml
 }
 
+$buildFlag = Join-Path $env:LOCALAPPDATA "Kuro\BUILDING"
+try {
+    New-Item -ItemType File -Force -Path $buildFlag | Out-Null
+} catch { }
+
+try {
 Write-Host "Stopping KuroShell, kuro-engine, and legacy Python Kuro"
 Stop-KuroBuildLocks
 Ensure-WhisperGgml
@@ -126,3 +133,16 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "Building KuroShell (Debug x64)"
 dotnet build $Shell -c Debug -p:Platform=x64
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+finally {
+    Remove-Item -LiteralPath $buildFlag -Force -ErrorAction SilentlyContinue
+    if ($script:wasRunning -or (-not (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "Kuro\DISABLED")))) {
+        Write-Host "Restarting Kuro service after native build..."
+        try {
+            & (Join-Path $PSScriptRoot "Start-Kuro.ps1") -ForceRestart
+        }
+        catch {
+            Write-Warning "Could not restart Kuro: $($_.Exception.Message)"
+        }
+    }
+}

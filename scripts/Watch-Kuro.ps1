@@ -14,9 +14,9 @@
 #>
 [CmdletBinding()]
 param(
-    [int]$PollSeconds = 20,
+    [int]$PollSeconds = 15,
     [int]$HeartbeatStaleSeconds = 120,
-    [int]$RestartCooldownSeconds = 60
+    [int]$RestartCooldownSeconds = 10
 )
 
 $ErrorActionPreference = "Continue"
@@ -40,6 +40,7 @@ $StartScript = Join-Path $PSScriptRoot "Start-Kuro.ps1"
 $LogDir = Join-Path $env:LOCALAPPDATA "Kuro"
 $LogFile = Join-Path $LogDir "supervisor.log"
 $DisableFlag = Join-Path $LogDir "DISABLED"
+$BuildFlag = Join-Path $LogDir "BUILDING"
 $HeartbeatFile = Join-Path $LogDir "heartbeat.txt"
 $MutexName = "Global\KuroAssistantSingleton.v1"
 
@@ -141,6 +142,9 @@ while ($true) {
         if (Test-Path -LiteralPath $DisableFlag) {
             Write-SuperLog "DISABLED flag set - supervisor idle."
         }
+        elseif (Test-Path -LiteralPath $BuildFlag) {
+            Write-SuperLog "BUILDING flag set - build in progress, supervisor waiting."
+        }
         else {
             $procs = @(Get-KuroProcesses)
             $shellLive = @($procs | Where-Object { $_.Name -eq "KuroShell.exe" }).Count -gt 0
@@ -151,12 +155,32 @@ while ($true) {
             $heartbeatOk = ($null -ne $hbAge -and $hbAge -ge 0 -and $hbAge -lt $HeartbeatStaleSeconds)
             $since = ((Get-Date) - $lastRestart).TotalSeconds
 
-            if ($shellLive -or ($engineLive -and ($heartbeatOk -or $mutexHeld)) -or ($legacyLive -and $mutexHeld)) {
-                # Shell owns engine recovery. Do not kill a live tree.
+            if ($shellLive -and $engineLive) {
+                # Both shell and engine running healthy.
             }
-            elseif ($procs.Count -eq 0) {
+            elseif ($shellLive -and -not $engineLive) {
+                # Shell is running and its internal watchdog will restart dead engine.
+                # If engine remains dead beyond HeartbeatStaleSeconds, trigger restart.
+                if (-not $heartbeatOk -and $hbAge -ge $HeartbeatStaleSeconds -and $since -ge $RestartCooldownSeconds) {
+                    Write-SuperLog "Engine stale while shell alive. Restarting Kuro."
+                    Stop-KuroTree | Out-Null
+                    Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`" -ForceRestart" -WindowStyle Hidden
+                    $lastRestart = Get-Date
+                }
+            }
+            elseif (-not $shellLive -and -not $engineLive) {
+                # Neither shell nor engine is running. Ensure any orphan process is stopped and start fresh.
                 if ($since -ge $RestartCooldownSeconds) {
                     Write-SuperLog "Kuro not running. Starting."
+                    Stop-KuroTree | Out-Null
+                    Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`"" -WindowStyle Hidden
+                    $lastRestart = Get-Date
+                }
+            }
+            elseif (-not $shellLive -and $engineLive) {
+                # Engine running without shell. Launch shell to supervise it.
+                if ($since -ge $RestartCooldownSeconds) {
+                    Write-SuperLog "Engine alive but shell missing. Launching shell."
                     Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`"" -WindowStyle Hidden
                     $lastRestart = Get-Date
                 }
