@@ -44,7 +44,7 @@ if (Test-Path -LiteralPath $DisableFlag) {
     }
     else {
         Write-KuroLog "Kuro DISABLED. Refusing start (Start-Kuro.ps1 -ForceRestart to re-enable)."
-        exit 0
+        return
     }
 }
 
@@ -293,11 +293,11 @@ try {
     }
 
     Write-KuroLog ("Kuro started. PID={0}" -f $proc.Id)
-    exit 0
+    return
 }
 catch {
     $msg = $_.Exception.Message
     try { Write-KuroLog ("ERROR: {0}" -f $msg) } catch { }
     Write-Error $msg
-    exit 1
+    return
 }

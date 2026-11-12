@@ -28,7 +28,7 @@ if (-not ("KuroConsoleHider" -as [type])) {
 try {
     $hwnd = [KuroWinAPI.KuroConsoleHider]::GetConsoleWindow()
     if ($hwnd -ne [IntPtr]::Zero) {
-        [KuroWinAPI.KuroConsoleHider]::ShowWindow($hwnd, 0)
+        [void][KuroWinAPI.KuroConsoleHider]::ShowWindow($hwnd, 0)
     }
 } catch { }
 

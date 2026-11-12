@@ -78,6 +78,7 @@ function Save-HomeSsid {
 }
 
 function Uninstall-KuroTask {
+    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Kuro" -ErrorAction SilentlyContinue
     foreach ($name in @($TaskName, $ModeTask, "KuroWifiWatcher")) {
         $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
         if ($existing) {
@@ -102,8 +103,11 @@ function Install-KuroTask {
         throw ("Legion mode script missing: {0}" -f $ModeScript)
     }
 
+    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Kuro" -ErrorAction SilentlyContinue
+
     $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $psExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+    $wscriptExe = Join-Path $env:SystemRoot "System32\wscript.exe"
+    $silentVbs = Join-Path $PSScriptRoot "start_kuro_silent.vbs"
 
     $settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `
@@ -112,26 +116,26 @@ function Install-KuroTask {
         -MultipleInstances IgnoreNew `
         -ExecutionTimeLimit ([TimeSpan]::Zero)
 
-    $watchArgs = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $WatchScript
+    $watchArgs = '//nologo "{0}"' -f $silentVbs
     $watchTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
     Set-TriggerDelay -Trigger $watchTrigger -Seconds 15
     $watchPrincipal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask `
         -TaskName $TaskName `
-        -Action (New-ScheduledTaskAction -Execute $psExe -Argument $watchArgs) `
+        -Action (New-ScheduledTaskAction -Execute $wscriptExe -Argument $watchArgs) `
         -Trigger $watchTrigger `
         -Settings $settings `
         -Principal $watchPrincipal `
         -Description "Starts the Kuro supervisor 15 seconds after logon (KuroShell + kuro-engine). Keeps one instance alive." `
         -Force | Out-Null
 
-    $modeArgs = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $ModeScript
+    $modeArgs = '//nologo "{0}" "{1}"' -f $silentVbs, $ModeScript
     $modeTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
     Set-TriggerDelay -Trigger $modeTrigger -Seconds 30
     $modePrincipal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Highest
     Register-ScheduledTask `
         -TaskName $ModeTask `
-        -Action (New-ScheduledTaskAction -Execute $psExe -Argument $modeArgs) `
+        -Action (New-ScheduledTaskAction -Execute $wscriptExe -Argument $modeArgs) `
         -Trigger $modeTrigger `
         -Settings $settings `
         -Principal $modePrincipal `

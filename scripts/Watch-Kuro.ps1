@@ -32,7 +32,7 @@ if (-not ("KuroWatchHider" -as [type])) {
 try {
     $hwnd = [KuroWinAPI.KuroWatchHider]::GetConsoleWindow()
     if ($hwnd -ne [IntPtr]::Zero) {
-        [KuroWinAPI.KuroWatchHider]::ShowWindow($hwnd, 0)
+        [void][KuroWinAPI.KuroWatchHider]::ShowWindow($hwnd, 0)
     }
 } catch { }
 
@@ -164,7 +164,7 @@ while ($true) {
                 if (-not $heartbeatOk -and $hbAge -ge $HeartbeatStaleSeconds -and $since -ge $RestartCooldownSeconds) {
                     Write-SuperLog "Engine stale while shell alive. Restarting Kuro."
                     Stop-KuroTree | Out-Null
-                    Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`" -ForceRestart" -WindowStyle Hidden
+                    & $StartScript -ForceRestart | Out-Null
                     $lastRestart = Get-Date
                 }
             }
@@ -173,7 +173,7 @@ while ($true) {
                 if ($since -ge $RestartCooldownSeconds) {
                     Write-SuperLog "Kuro not running. Starting."
                     Stop-KuroTree | Out-Null
-                    Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`"" -WindowStyle Hidden
+                    & $StartScript | Out-Null
                     $lastRestart = Get-Date
                 }
             }
@@ -181,7 +181,7 @@ while ($true) {
                 # Engine running without shell. Launch shell to supervise it.
                 if ($since -ge $RestartCooldownSeconds) {
                     Write-SuperLog "Engine alive but shell missing. Launching shell."
-                    Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`"" -WindowStyle Hidden
+                    & $StartScript | Out-Null
                     $lastRestart = Get-Date
                 }
             }
@@ -189,7 +189,7 @@ while ($true) {
                 $why = "shell={0} engine={1} mutex={2} heartbeatAge={3}" -f $shellLive, $engineLive, $mutexHeld, $hbAge
                 Write-SuperLog ("Kuro wedged ({0}). Force restart." -f $why)
                 Stop-KuroTree | Out-Null
-                Start-Process -FilePath powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`" -ForceRestart" -WindowStyle Hidden
+                & $StartScript -ForceRestart | Out-Null
                 $lastRestart = Get-Date
             }
             else {
