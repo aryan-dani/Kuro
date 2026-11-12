@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tokio::sync::Notify;
 
 use axum::extract::{State, WebSocketUpgrade};
 use axum::http::{HeaderMap, StatusCode};
@@ -44,6 +45,7 @@ pub struct AppState {
     pub shutdown_hook: Mutex<Option<std::sync::Arc<dyn Fn() + Send + Sync>>>,
     /// Shared with the hotkey loop so Escape / `/dismiss` can cancel a live turn.
     pub clock: std::sync::Arc<Mutex<kuro_core::TurnClock>>,
+    pub hud_wake: Arc<Notify>,
 }
 
 pub fn event_frame(hud: &HudSnap, paused: bool, include_text: bool) -> Value {
@@ -89,18 +91,33 @@ pub fn router(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
+fn router_mode() -> &'static str {
+    if kuro_router::embed::ready() { "semantic_onnx" } else { "legacy" }
+}
+
+fn config_payload(cfg: &EngineConfig) -> Value {
+    let mut val = kuro_core::public_config(cfg);
+    if let Some(obj) = val.as_object_mut() {
+        obj.insert("router_mode".into(), json!(router_mode()));
+        obj.insert("tts_active".into(), json!(kuro_tts::active_engine_name(&cfg.tts_engine)));
+    }
+    val
+}
+
 async fn status(State(state): State<Arc<AppState>>, headers: HeaderMap) -> impl IntoResponse {
     if !authed(&state, &headers) {
         return deny().into_response();
     }
     let hud = state.hud.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    let paused = state.config.lock().unwrap_or_else(|e| e.into_inner()).paused;
+    let cfg = state.config.lock().unwrap_or_else(|e| e.into_inner()).clone();
     Json(json!({
         "ok": true,
-        "paused": paused,
+        "paused": cfg.paused,
         "state": hud.state,
         "api": true,
         "logs": kuro_core::local_root().display().to_string(),
+        "router_mode": router_mode(),
+        "tts_active": kuro_tts::active_engine_name(&cfg.tts_engine),
     }))
     .into_response()
 }
@@ -110,7 +127,7 @@ async fn get_config(State(state): State<Arc<AppState>>, headers: HeaderMap) -> i
         return deny().into_response();
     }
     let cfg = state.config.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    Json(kuro_core::public_config(&cfg)).into_response()
+    Json(config_payload(&cfg)).into_response()
 }
 
 async fn put_config(State(state): State<Arc<AppState>>, headers: HeaderMap, body: String) -> impl IntoResponse {
@@ -127,7 +144,7 @@ async fn put_config(State(state): State<Arc<AppState>>, headers: HeaderMap, body
     if apply_config(&mut cfg, &payload).is_err() {
         return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
     }
-    Json(kuro_core::public_config(&cfg)).into_response()
+    Json(config_payload(&cfg)).into_response()
 }
 
 fn read_json(path: &std::path::Path) -> Option<Value> {
@@ -319,6 +336,7 @@ async fn dismiss(State(state): State<Arc<AppState>>, headers: HeaderMap) -> impl
         hud.you.clear();
         hud.kuro.clear();
     }
+    state.hud_wake.notify_waiters();
     Json(json!({"ok": true})).into_response()
 }
 
@@ -351,7 +369,10 @@ async fn events(State(state): State<Arc<AppState>>, headers: HeaderMap, ws: WebS
             let cfg = state.config.lock().unwrap_or_else(|e| e.into_inner()).clone();
             let frame = event_frame(&hud, cfg.paused, cfg.hud_show_text).to_string();
             if skip_unchanged_quiet_frame(&hud, previous.as_deref(), &frame) {
-                tokio::time::sleep(std::time::Duration::from_millis(33)).await;
+                tokio::select! {
+                    () = state.hud_wake.notified() => {}
+                    () = tokio::time::sleep(std::time::Duration::from_secs(30)) => {}
+                }
                 continue;
             }
             if socket.send(axum::extract::ws::Message::Text(frame.clone())).await.is_err() {

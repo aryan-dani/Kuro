@@ -1,2 +1,8 @@
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-cpu=x86-64-v3"]
+
+[env]
+CFLAGS = "/O2 /arch:AVX2 /fp:fast"
+CXXFLAGS = "/O2 /arch:AVX2 /fp:fast"
+CMAKE_C_FLAGS_RELEASE = "/O2 /arch:AVX2 /fp:fast"
+CMAKE_CXX_FLAGS_RELEASE = "/O2 /arch:AVX2 /fp:fast"

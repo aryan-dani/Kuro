@@ -34,7 +34,7 @@ fn follow_up_stops_on_epoch_loss_silence_and_cap() {
 
 #[test]
 fn partial_window_after_point_eight_seconds() {
-    let mut ptt = PttBuffer::new();
+    let (mut ptt, _) = PttBuffer::new();
     ptt.push(&vec![0.1; 12_000]);
     assert!(ptt.take_partial().is_none());
     ptt.push(&vec![0.1; 1_000]);

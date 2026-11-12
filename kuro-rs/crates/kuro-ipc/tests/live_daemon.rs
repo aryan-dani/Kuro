@@ -8,6 +8,7 @@ use kuro_tools::brain::Brain;
 use serde_json::json;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::windows::named_pipe::ClientOptions;
+use tokio::sync::Notify;
 use tokio::time::timeout;
 
 fn temp_dir() -> std::path::PathBuf {
@@ -37,6 +38,7 @@ fn state(dir: &std::path::Path) -> Arc<AppState> {
         shutdown_hits: Mutex::new(0),
         shutdown_hook: Mutex::new(None),
         clock: Arc::new(Mutex::new(kuro_core::TurnClock::default())),
+        hud_wake: Arc::new(Notify::new()),
     })
 }
 
@@ -63,6 +65,15 @@ async fn live_daemon_http_pipe_and_auth() {
 
     let ok = client.get(format!("{base}/status")).header("x-kuro-token", "gate-test-token").send().await.unwrap();
     assert_eq!(ok.status(), StatusCode::OK);
+    let status_json: serde_json::Value = serde_json::from_str(&ok.text().await.unwrap()).unwrap();
+    assert!(matches!(status_json["router_mode"].as_str(), Some("semantic_onnx" | "legacy")));
+    assert!(matches!(status_json["tts_active"].as_str(), Some("kokoro" | "piper" | "sapi")));
+
+    let cfg_res = client.get(format!("{base}/config")).header("x-kuro-token", "gate-test-token").send().await.unwrap();
+    assert_eq!(cfg_res.status(), StatusCode::OK);
+    let cfg_json: serde_json::Value = serde_json::from_str(&cfg_res.text().await.unwrap()).unwrap();
+    assert!(matches!(cfg_json["router_mode"].as_str(), Some("semantic_onnx" | "legacy")));
+    assert!(matches!(cfg_json["tts_active"].as_str(), Some("kokoro" | "piper" | "sapi")));
 
     let say = client
         .post(format!("{base}/say"))

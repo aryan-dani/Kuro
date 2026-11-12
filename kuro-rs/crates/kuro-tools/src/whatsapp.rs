@@ -6,7 +6,7 @@ use fancy_regex::Regex;
 use kuro_core::get_close_matches;
 use serde_json::Value;
 
-const CUTOFF: f64 = 0.75;
+const CUTOFF: f64 = 0.86;
 const FILLERS: &[&str] = &["please", "hey", "kuro", "can", "you", "could", "would", "just", "kindly"];
 const IMAGE_FORMATS: &[i32] = &[2, 8, 17, 15];
 

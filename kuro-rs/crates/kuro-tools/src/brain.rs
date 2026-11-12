@@ -112,3 +112,17 @@ pub fn chat(model: &str, messages: &[Value]) -> Result<String, String> {
         .unwrap_or("The neural engine started, but the reply failed.")
         .to_string())
 }
+
+pub fn prewarm_model(model: &str) {
+    let base = std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
+    let url = format!("{}/api/generate", base.trim_end_matches('/'));
+    let body = json!({
+        "model": model,
+        "keep_alive": "60m"
+    })
+    .to_string();
+    let _ = ureq::post(&url)
+        .timeout(std::time::Duration::from_secs(60))
+        .set("Content-Type", "application/json")
+        .send_string(&body);
+}

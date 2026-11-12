@@ -7,6 +7,7 @@ use kuro_core::EngineConfig;
 use kuro_ipc::{AppState, HudSnap, event_frame, router};
 use kuro_tools::brain::Brain;
 use serde_json::json;
+use tokio::sync::Notify;
 use tower::ServiceExt;
 
 fn state(dir: &std::path::Path) -> Arc<AppState> {
@@ -30,6 +31,7 @@ fn state(dir: &std::path::Path) -> Arc<AppState> {
         shutdown_hits: Mutex::new(0),
         shutdown_hook: Mutex::new(None),
         clock: Arc::new(Mutex::new(kuro_core::TurnClock::default())),
+        hud_wake: Arc::new(Notify::new()),
     })
 }
 

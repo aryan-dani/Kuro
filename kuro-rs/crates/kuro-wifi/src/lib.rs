@@ -40,7 +40,13 @@ impl WifiPolicy {
 }
 
 pub fn current_ssid() -> Option<String> {
-    let output = std::process::Command::new("netsh").args(["wlan", "show", "interfaces"]).output().ok()?;
+    let mut cmd = std::process::Command::new("netsh");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let output = cmd.args(["wlan", "show", "interfaces"]).output().ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
     for line in text.lines() {
         let line = line.trim();
