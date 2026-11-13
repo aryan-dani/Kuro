@@ -503,6 +503,13 @@ mod tests {
 
     #[test]
     fn espeak_preserves_comma_pause_before_next_word() {
+        // This asserts espeak-ng IPA reconstruction (comma glued to prior word + space).
+        // Without espeak, simple_g2p keeps the letters of "time," so the token before
+        // comma is 'e' — skip rather than fail headless CI runners.
+        if detect_espeak().is_none() {
+            eprintln!("espeak-ng absent; skip");
+            return;
+        }
         let text = "Once upon a time, in...";
         let ipa = phonemize(text);
         assert!(ipa.contains(", "), "IPA must retain comma followed by space: {ipa}");
