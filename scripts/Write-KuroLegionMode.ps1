@@ -12,10 +12,19 @@
 #>
 [CmdletBinding()]
 param(
+    [switch]$Silent,
     [int]$PollSeconds = 15
 )
 
 $ErrorActionPreference = "Continue"
+
+if (-not $Silent) {
+    $vbs = Join-Path $PSScriptRoot "start_kuro_silent.vbs"
+    if (Test-Path -LiteralPath $vbs) {
+        Start-Process "wscript.exe" -ArgumentList ('//nologo "{0}" "{1}"' -f $vbs, $PSCommandPath)
+        return
+    }
+}
 
 if (-not ("KuroConsoleHider" -as [type])) {
     try {

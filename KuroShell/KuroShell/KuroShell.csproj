@@ -11,13 +11,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnableMsixTooling>true</EnableMsixTooling>
-    <WindowsPackageType Condition="'$(Configuration)' == 'Debug'">None</WindowsPackageType>
-    <WindowsPackageType Condition="'$(Configuration)' != 'Debug'">MSIX</WindowsPackageType>
-    <WindowsAppSDKSelfContained Condition="'$(WindowsPackageType)' == 'None'">true</WindowsAppSDKSelfContained>
-    <ApplicationManifest Condition="'$(WindowsPackageType)' == 'None'">app.manifest</ApplicationManifest>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
-    <GenerateAppxPackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GenerateAppxPackageOnBuild>
+    <GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <ApplicationIcon>..\..\assets\branding\kuro.ico</ApplicationIcon>
   </PropertyGroup>

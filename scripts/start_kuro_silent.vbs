@@ -26,5 +26,5 @@ Else
   End If
 End If
 
-cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & targetPs1 & """" & extraArgs
+cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & targetPs1 & """ -Silent" & extraArgs
 WshShell.Run cmd, 0, False

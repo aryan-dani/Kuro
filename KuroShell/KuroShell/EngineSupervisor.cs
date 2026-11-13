@@ -168,6 +168,38 @@ public sealed class EngineSupervisor
         ProcessStartInfo info;
         if (engine is not null)
         {
+            try
+            {
+                var lockPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Kuro", "kuro.lock");
+                if (File.Exists(lockPath))
+                {
+                    var text = File.ReadAllText(lockPath).Trim();
+                    if (!int.TryParse(text, out var pid))
+                    {
+                        File.Delete(lockPath);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var proc = Process.GetProcessById(pid);
+                            if (proc.HasExited)
+                            {
+                                File.Delete(lockPath);
+                            }
+                        }
+                        catch (ArgumentException)
+                        {
+                            File.Delete(lockPath);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore lock cleanup errors
+            }
+
             info = new ProcessStartInfo
             {
                 FileName = engine,

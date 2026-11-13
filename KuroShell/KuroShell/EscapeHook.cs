@@ -21,6 +21,7 @@ internal sealed class EscapeHook : IDisposable
     private readonly LowLevelProc _proc;
     private IntPtr _hook;
     private bool _suppressingEscape;
+    private long _lastSuppressedTicks;
 
     public EscapeHook(Func<bool> active, Action onEscape)
     {
@@ -51,9 +52,12 @@ internal sealed class EscapeHook : IDisposable
                 var info = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
                 if (info.VkCode == VkEscape)
                 {
+                    var now = Environment.TickCount64;
+                    var recentlySuppressed = (now - _lastSuppressedTicks) < 350;
                     if (_active())
                     {
                         _suppressingEscape = true;
+                        _lastSuppressedTicks = now;
                         try
                         {
                             _onEscape();
@@ -65,6 +69,12 @@ internal sealed class EscapeHook : IDisposable
 
                         return (IntPtr)1;
                     }
+                    else if (_suppressingEscape || recentlySuppressed)
+                    {
+                        // Repeat keydown or bounce right after dismissal; swallow so it does not leak to focused app.
+                        _lastSuppressedTicks = now;
+                        return (IntPtr)1;
+                    }
 
                     _suppressingEscape = false;
                 }
@@ -72,7 +82,9 @@ internal sealed class EscapeHook : IDisposable
             else if (msg is WmKeyup or WmSyskeyup)
             {
                 var info = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
-                if (info.VkCode == VkEscape && _suppressingEscape)
+                var now = Environment.TickCount64;
+                var recentlySuppressed = (now - _lastSuppressedTicks) < 350;
+                if (info.VkCode == VkEscape && (_suppressingEscape || recentlySuppressed))
                 {
                     _suppressingEscape = false;
                     return (IntPtr)1;

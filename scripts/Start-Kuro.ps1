@@ -64,8 +64,9 @@ function Get-KuroProcesses {
 
 function Find-KuroShell {
     $candidates = @(
-        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"),
-        (Join-Path $env:LOCALAPPDATA "Kuro\shell\KuroShell.exe")
+        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"),
+        (Join-Path $env:LOCALAPPDATA "Kuro\shell\KuroShell.exe"),
+        (Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe")
     ) | Where-Object { Test-Path -LiteralPath $_ }
     if (-not $candidates -or $candidates.Count -eq 0) {
         return $null
@@ -74,7 +75,10 @@ function Find-KuroShell {
 }
 
 function Publish-KuroShell {
-    $built = Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"
+    $built = Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"
+    if (-not (Test-Path -LiteralPath $built)) {
+        $built = Join-Path $KuroRoot "KuroShell\KuroShell\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\KuroShell.exe"
+    }
     if (-not (Test-Path -LiteralPath $built)) {
         return
     }
@@ -134,12 +138,24 @@ function Stop-KuroProcesses {
 }
 
 function Test-OllamaServing {
+    $client = $null
     try {
-        $r = Invoke-WebRequest -Uri "http://127.0.0.1:11434/api/tags" -UseBasicParsing -TimeoutSec 2
-        return ($r.StatusCode -ge 200 -and $r.StatusCode -lt 300)
+        $client = [System.Net.Sockets.TcpClient]::new()
+        $ar = $client.BeginConnect("127.0.0.1", 11434, $null, $null)
+        $wh = $ar.AsyncWaitHandle
+        if (-not $wh.WaitOne(300, $false)) {
+            $client.Close()
+            return $false
+        }
+        $client.EndConnect($ar)
+        $client.Close()
+        return $true
     }
     catch {
         return $false
+    }
+    finally {
+        if ($client) { try { $client.Dispose() } catch { } }
     }
 }
 
@@ -256,16 +272,23 @@ try {
     }
     elseif ($Shell -and $shellLive -and $engineLive) {
         Write-KuroLog ("Kuro already running (shell+engine) - skip start.")
-        exit 0
+        return
     }
     elseif (-not $Shell -and ((Test-KuroMutexHeld) -or $engineLive -or ($existing.Count -gt 0))) {
         $pidShown = if ($existing.Count -gt 0) { $existing[0].ProcessId } else { "mutex" }
         Write-KuroLog ("Kuro already running ({0}) - skip start." -f $pidShown)
-        exit 0
+        return
     }
     elseif ($Shell -and $shellLive -and -not $engineLive) {
         Write-KuroLog "KuroShell is up but engine is down - leaving shell to relaunch engine."
-        exit 0
+        return
+    }
+
+    if (-not $engineLive) {
+        $lock = Join-Path $LogDir "kuro.lock"
+        if (Test-Path -LiteralPath $lock) {
+            Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
+        }
     }
 
     if ($env:ONLY_WHEN_CHARGING) {

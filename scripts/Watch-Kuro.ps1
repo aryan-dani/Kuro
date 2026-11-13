@@ -14,12 +14,21 @@
 #>
 [CmdletBinding()]
 param(
+    [switch]$Silent,
     [int]$PollSeconds = 15,
     [int]$HeartbeatStaleSeconds = 120,
     [int]$RestartCooldownSeconds = 10
 )
 
 $ErrorActionPreference = "Continue"
+
+if (-not $Silent) {
+    $vbs = Join-Path $PSScriptRoot "start_kuro_silent.vbs"
+    if (Test-Path -LiteralPath $vbs) {
+        Start-Process "wscript.exe" -ArgumentList ('//nologo "{0}"' -f $vbs)
+        return
+    }
+}
 
 if (-not ("KuroWatchHider" -as [type])) {
     try {
@@ -159,10 +168,14 @@ while ($true) {
                 # Both shell and engine running healthy.
             }
             elseif ($shellLive -and -not $engineLive) {
-                # Shell is running and its internal watchdog will restart dead engine.
-                # If engine remains dead beyond HeartbeatStaleSeconds, trigger restart.
-                if (-not $heartbeatOk -and $hbAge -ge $HeartbeatStaleSeconds -and $since -ge $RestartCooldownSeconds) {
-                    Write-SuperLog "Engine stale while shell alive. Restarting Kuro."
+                # Shell is running and its internal watchdog should restart dead engine.
+                # If engine remains dead beyond 20s, clear any stale lock and trigger restart.
+                if ($since -ge 20) {
+                    Write-SuperLog "Engine dead while shell alive. Restarting Kuro."
+                    $lock = Join-Path $LogDir "kuro.lock"
+                    if (Test-Path -LiteralPath $lock) {
+                        Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
+                    }
                     Stop-KuroTree | Out-Null
                     & $StartScript -ForceRestart | Out-Null
                     $lastRestart = Get-Date
