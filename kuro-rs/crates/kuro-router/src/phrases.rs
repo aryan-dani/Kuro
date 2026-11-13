@@ -365,10 +365,7 @@ fn desk_keywords(t: &str) -> bool {
 }
 fn power_command_shaped(t: &str) -> bool {
     // Imperative desk control — not "why does my monitor turn off".
-    if crate::semantic::looks_like_question(t) {
-        return false;
-    }
-    true
+    !crate::semantic::looks_like_question(t)
 }
 pub fn is_power_off(t: &str) -> bool {
     if !power_command_shaped(t) {

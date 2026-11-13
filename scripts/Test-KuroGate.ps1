@@ -82,9 +82,9 @@ Invoke-Stage "3 cargo fmt + clippy" {
     $ErrorActionPreference = "Continue"
     try {
         Push-Location (Join-Path $Root "kuro-rs")
-        cargo fmt --manifest-path $Manifest --all -- --check 2>&1 | Out-Null
+        cargo fmt --manifest-path $Manifest --all -- --check
         if ($LASTEXITCODE -ne 0) { throw "fmt check failed" }
-        cargo clippy --manifest-path $Manifest --workspace --all-targets -- -D warnings 2>&1 | Out-Null
+        cargo clippy --manifest-path $Manifest --workspace --all-targets -- -D warnings
         if ($LASTEXITCODE -ne 0) { throw "clippy failed" }
     }
     finally {
@@ -131,15 +131,28 @@ Invoke-Stage "5 dotnet build + test" {
 Invoke-Stage "6 live smoke kuro-engine" {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    Push-Location (Join-Path $Root "kuro-rs")
-    try {
-        cargo build --manifest-path $Manifest --release -p kuro-engine 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "engine build failed" }
+    $smokeEngine = $EngineRelease
+    if ($env:CI -or -not (Test-Path -LiteralPath $EngineRelease)) {
+        Push-Location (Join-Path $Root "kuro-rs")
+        try {
+            cargo build --manifest-path $Manifest --release -p kuro-engine
+            if ($LASTEXITCODE -ne 0) { throw "engine build failed" }
+        }
+        finally {
+            Pop-Location
+        }
+        $smokeEngine = $EngineRelease
     }
-    finally {
-        Pop-Location
+    else {
+        # Local commits often have kuro-engine.exe locked by the live process.
+        # Copy (read) into TEMP so smoke does not need to overwrite the running binary.
+        $smokeEngine = Join-Path $env:TEMP ("kuro-gate-smoke-{0}.exe" -f [guid]::NewGuid().ToString("N"))
+        Copy-Item -LiteralPath $EngineRelease -Destination $smokeEngine -Force
     }
     $ErrorActionPreference = $prevEap
+    if (-not (Test-Path -LiteralPath $smokeEngine)) {
+        throw "smoke engine missing at $smokeEngine"
+    }
     $data = Join-Path $env:TEMP ("Kuro-gate-{0}" -f [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Force -Path $data | Out-Null
     New-Item -ItemType File -Force -Path (Join-Path $data "AWAY_OK") | Out-Null
@@ -151,7 +164,7 @@ Invoke-Stage "6 live smoke kuro-engine" {
     $env:KURO_API = "on"
     $env:KURO_API_PORT = "18799"
     $env:KURO_GATE_CI = "1"
-    $proc = Start-Process -FilePath $EngineRelease -PassThru -WindowStyle Hidden
+    $proc = Start-Process -FilePath $smokeEngine -PassThru -WindowStyle Hidden
     Start-Sleep -Seconds 2
     try {
         $headers = @{ "x-kuro-token" = $token }

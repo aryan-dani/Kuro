@@ -160,7 +160,18 @@ fn edge_path() -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
+fn meet_open_enabled() -> bool {
+    matches!(
+        std::env::var("KURO_MEET_OPEN").unwrap_or_default().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
 fn open_edge(link: &str) -> bool {
+    if !meet_open_enabled() {
+        // Default off: creating/sending a Meet must not steal focus with a new Edge tab.
+        return false;
+    }
     let Some(edge) = edge_path() else {
         return false;
     };
@@ -226,29 +237,31 @@ fn run_native(token_path: &Path, digits: &str, shown: &str) -> String {
         return "I couldn't create that Google Meet.".into();
     };
 
-    // Link first so the contact is not waiting on Edge.
+    // Link first so the contact is not waiting on a browser.
     let sent_ok = if digits.is_empty() {
         true
     } else {
         match crate::whatsapp::deliver_text(digits, &link) {
             Ok(()) => true,
-            Err(err) => {
-                let _ = open_edge(&link);
-                return err;
-            }
+            Err(err) => return err,
         }
     };
 
-    if !open_edge(&link) {
-        if !digits.is_empty() && sent_ok {
-            return format!("Success: Sent the Meet link to {shown}, but Edge did not open.");
-        }
-        return "The Meet was created, but Edge did not open.".into();
-    }
+    let opened = open_edge(&link);
     if digits.is_empty() {
-        return "Success: The Meet is open.".into();
+        if opened {
+            return "Success: The Meet is open.".into();
+        }
+        // Default: create only; speak the fact without forcing a tab.
+        return format!("Success: Meet ready. {link}");
     }
-    format!("Success: Sent the Meet link to {shown}.")
+    if sent_ok && opened {
+        return format!("Success: Sent the Meet link to {shown}.");
+    }
+    if sent_ok {
+        return format!("Success: Sent the Meet link to {shown}.");
+    }
+    "I couldn't send that Meet link.".into()
 }
 
 fn google_token_usable(path: &Path) -> bool {
