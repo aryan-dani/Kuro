@@ -101,12 +101,15 @@ static NEED_SHIFT: AtomicBool = AtomicBool::new(false);
 static NEED_WIN: AtomicBool = AtomicBool::new(false);
 static TRIG_VK: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0x20);
 
-fn chord_ready() -> bool {
+fn modifiers_held() -> bool {
     (!NEED_CTRL.load(Ordering::Relaxed) || CTRL_DOWN.load(Ordering::Relaxed))
         && (!NEED_ALT.load(Ordering::Relaxed) || ALT_DOWN.load(Ordering::Relaxed))
         && (!NEED_SHIFT.load(Ordering::Relaxed) || SHIFT_DOWN.load(Ordering::Relaxed))
         && (!NEED_WIN.load(Ordering::Relaxed) || WIN_DOWN.load(Ordering::Relaxed))
-        && TRIG_DOWN.load(Ordering::Relaxed)
+}
+
+fn chord_armed() -> bool {
+    modifiers_held() && TRIG_DOWN.load(Ordering::Relaxed)
 }
 
 fn post_to_hook_hwnd(msg: u32) {
@@ -122,13 +125,20 @@ fn post_to_hook_hwnd(msg: u32) {
 }
 
 fn sync_ptt_from_keys() {
-    let want = chord_ready();
     let held = PTT_HELD.load(Ordering::SeqCst);
-    if want && !held {
-        PTT_HELD.store(true, Ordering::SeqCst);
-        post_to_hook_hwnd(WM_KURO_PTT_DOWN);
-    } else if !want && held {
+    if !held {
+        // Start only when the full chord is down (Ctrl+Alt+Space).
+        if chord_armed() {
+            PTT_HELD.store(true, Ordering::SeqCst);
+            post_to_hook_hwnd(WM_KURO_PTT_DOWN);
+        }
+        return;
+    }
+    // Once listening, keep going until a *modifier* lifts. Space alone may bounce
+    // up early on real keyboards and was cutting captures to <1s with empty STT.
+    if !modifiers_held() {
         PTT_HELD.store(false, Ordering::SeqCst);
+        TRIG_DOWN.store(false, Ordering::Relaxed);
         post_to_hook_hwnd(WM_KURO_PTT_UP);
     }
 }
