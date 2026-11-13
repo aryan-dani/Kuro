@@ -13,10 +13,7 @@ static HOME_COOLDOWN_UNTIL: AtomicU64 = AtomicU64::new(0);
 const HOME_COOLDOWN_SECS: u64 = 45;
 
 fn unix_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 #[derive(Clone, Debug)]
