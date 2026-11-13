@@ -1,11 +1,23 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::Local;
 use regex::Regex;
 use serde_json::json;
 
-static HOME_INFLIGHT: AtomicBool = AtomicBool::new(false);
+/// Debounce daddy-home across rapid repeats. Cleared only by cooldown — not when
+/// music/plug threads finish (those return instantly on headless CI and used to
+/// re-arm the latch before the next phrase in the same test).
+static HOME_COOLDOWN_UNTIL: AtomicU64 = AtomicU64::new(0);
+const HOME_COOLDOWN_SECS: u64 = 45;
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
 
 #[derive(Clone, Debug)]
 pub struct PhraseResult {
@@ -264,15 +276,17 @@ fn legacy_try_handle(t: &str) -> Option<PhraseResult> {
 }
 
 fn fire_daddys_home() -> bool {
-    if HOME_INFLIGHT.swap(true, Ordering::SeqCst) {
+    let now = unix_now();
+    let until = HOME_COOLDOWN_UNTIL.load(Ordering::SeqCst);
+    if now < until {
         return false;
     }
+    HOME_COOLDOWN_UNTIL.store(now.saturating_add(HOME_COOLDOWN_SECS), Ordering::SeqCst);
     std::thread::spawn(|| {
         let _ = kuro_tools::execute_tool("control_smart_plug", &json!({"scene": "daddy_home"}));
     });
     std::thread::spawn(|| {
         let _ = kuro_tools::music::play_should_i_stay_or_should_i_go();
-        HOME_INFLIGHT.store(false, Ordering::SeqCst);
     });
     true
 }
