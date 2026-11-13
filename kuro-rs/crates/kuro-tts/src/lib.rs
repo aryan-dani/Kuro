@@ -21,6 +21,10 @@ pub fn kokoro_models_present() -> bool {
     kokoro::ready()
 }
 
+pub fn piper_models_present() -> bool {
+    piper::default_model().is_some()
+}
+
 pub fn select_kind(requested: &str) -> TtsKind {
     match requested.trim().to_ascii_lowercase().as_str() {
         "kokoro" => TtsKind::Kokoro,

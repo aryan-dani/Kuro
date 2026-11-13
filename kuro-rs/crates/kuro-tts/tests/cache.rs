@@ -1,8 +1,16 @@
-use kuro_tts::{Speaker, TtsKind, kokoro_models_present, select_kind};
+use kuro_tts::{Speaker, TtsKind, kokoro_models_present, piper_models_present, select_kind};
 
 #[test]
 fn auto_and_piper_share_the_native_engine() {
-    let auto = if kokoro_models_present() { TtsKind::Kokoro } else { TtsKind::Piper };
+    // auto prefers Kokoro → Piper → Sapi depending on which models exist on disk.
+    // CI runners typically have none, so expect Sapi there.
+    let auto = if kokoro_models_present() {
+        TtsKind::Kokoro
+    } else if piper_models_present() {
+        TtsKind::Piper
+    } else {
+        TtsKind::Sapi
+    };
     assert_eq!(select_kind("auto"), auto);
     assert_eq!(select_kind("kokoro"), TtsKind::Kokoro);
     assert_eq!(select_kind("piper"), TtsKind::Piper);
