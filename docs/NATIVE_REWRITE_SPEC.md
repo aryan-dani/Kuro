@@ -35,7 +35,7 @@ Ship a performance rewrite: lower idle RAM, lower VRAM when dormant, lower time-
 
 ### 1.3 Python remains until cutover
 
-`run_kuro.py` / `main.py` remain the engine until `kuro-engine.exe` passes this checklist. When the shell can spawn the Rust binary, `KURO_LEGACY_PYTHON=1` forces the Python engine. Do not delete Python modules until the native path is the default and the parity suite is green.
+**Status (2026-11-13):** the Python engine under `legacy/python` has been removed. `kuro-engine.exe` is the only runtime. Optional offline helpers may remain under `scripts/bench/*.py`.
 
 ---
 
@@ -302,7 +302,7 @@ Self-hosted n8n (`KURO_N8N_*`) is a separate client from the hub.
 | `KURO_HUD_SHOW_TEXT` | Include transcripts on `/events` |
 | `KURO_TIMING` | Write `%LOCALAPPDATA%\Kuro\timing.csv` |
 | `KURO_HOME_SSID` | Wi-Fi watch home SSIDs (comma-separated) |
-| `KURO_LEGACY_PYTHON` | Future: force Python engine when Rust binary exists |
+| `KURO_LEGACY_PYTHON` | Removed — Rust-only |
 
 Never put secret values in the repo or this doc.
 
@@ -425,7 +425,7 @@ Do not start these until this document is the working checklist.
 
 1. **Phase 2 — Rust core:** workspace `kuro-rs/` with `kuro-hotkey` (`RegisterHotKey` + release poll), `kuro-router` (full phrase + hub + Tuya + Ollama clients), `kuro-wifi`, `kuro-ipc` (exact `127.0.0.1:8765` contract). `cargo test` mirrors the Python suite above.
 2. **Phase 3 — Audio / STT / TTS:** WASAPI capture, unified Whisper ONNX / Sherpa with CUDA / OpenVINO / DirectML / CPU selection matching `compute_policy`, TTS backends with XTTS-compatible path retained until Kokoro acceptance, timing CSV parity.
-3. **Phase 4 — Shell:** spawn `kuro-engine.exe` by default; `KURO_LEGACY_PYTHON=1` for Python; source-generated JSON; no move/resize on HUD state ticks; `dotnet test` green.
+3. **Phase 4 — Shell:** spawn `kuro-engine.exe` by default; source-generated JSON; no move/resize on HUD state ticks; `dotnet test` green.
 4. **Phase 5 — Scripts / benchmarks:** `scripts/Build-KuroNative.ps1`, update `scripts/Start-Kuro.ps1`, compare idle RAM / VRAM / voice latency to the Python baseline in `docs/PERF_BASELINE.md` / `docs/PERF_RESULTS.md`.
 
 Additive options after wire parity: named pipe IPC, headless Win32 tray + Direct2D mark when API is off, Kokoro as an extra TTS engine.
@@ -448,7 +448,7 @@ Until then, Python is the source of truth for behavior.
 
 ## 17. Native engine status
 
-`kuro-engine.exe` is the default process for `scripts/Start-Kuro.ps1` and `KuroShell` when the release binary exists. `KURO_LEGACY_PYTHON=1`, or a missing binary, still starts `run_kuro.py`. Normal `kuro-engine.exe` does not spawn `python.exe`.
+`kuro-engine.exe` is the only process for `scripts/Start-Kuro.ps1` and `KuroShell`. There is no Python fallback.
 
 Speech weights:
 

@@ -8,7 +8,6 @@ $ShellProj = Join-Path $Root "KuroShell\KuroShell\KuroShell.csproj"
 $ShellTests = Join-Path $Root "KuroShell\KuroShell.Tests\KuroShell.Tests.csproj"
 $EngineRelease = Join-Path $Root "kuro-rs\target\release\kuro-engine.exe"
 $Invariants = Join-Path $Root "scripts\Test-KuroInvariants.ps1"
-$VenvPy = Join-Path $Root ".venv\Scripts\python.exe"
 
 function Write-Stage([string]$Name, [bool]$Ok, [double]$Seconds) {
     $tag = if ($Ok) { "[PASS]" } else { "[FAIL]" }
@@ -129,16 +128,7 @@ Invoke-Stage "5 dotnet build + test" {
     }
 }
 
-Invoke-Stage "6 pytest" {
-    if (-not (Test-Path -LiteralPath $VenvPy)) {
-        Write-Host "  (skip: no .venv)"
-        return
-    }
-    & $VenvPy -m pytest (Join-Path $Root "legacy\python\tests") -q 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "pytest failed" }
-}
-
-Invoke-Stage "7 live smoke kuro-engine" {
+Invoke-Stage "6 live smoke kuro-engine" {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     Push-Location (Join-Path $Root "kuro-rs")

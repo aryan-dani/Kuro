@@ -14,21 +14,16 @@
 #>
 [CmdletBinding()]
 param(
-    [switch]$Silent,
+    # Default silent so Task Scheduler PowerShell actions never leave a console up.
+    [switch]$ShowConsole,
     [int]$PollSeconds = 15,
     [int]$HeartbeatStaleSeconds = 120,
-    [int]$RestartCooldownSeconds = 10
+    [int]$RestartCooldownSeconds = 10,
+    # Kept for start_kuro_silent.vbs callers; ignored (always silent unless -ShowConsole).
+    [switch]$Silent
 )
 
 $ErrorActionPreference = "Continue"
-
-if (-not $Silent) {
-    $vbs = Join-Path $PSScriptRoot "start_kuro_silent.vbs"
-    if (Test-Path -LiteralPath $vbs) {
-        Start-Process "wscript.exe" -ArgumentList ('//nologo "{0}"' -f $vbs)
-        return
-    }
-}
 
 if (-not ("KuroWatchHider" -as [type])) {
     try {
@@ -39,9 +34,11 @@ if (-not ("KuroWatchHider" -as [type])) {
     } catch { }
 }
 try {
-    $hwnd = [KuroWinAPI.KuroWatchHider]::GetConsoleWindow()
-    if ($hwnd -ne [IntPtr]::Zero) {
-        [void][KuroWinAPI.KuroWatchHider]::ShowWindow($hwnd, 0)
+    if (-not $ShowConsole) {
+        $hwnd = [KuroWinAPI.KuroWatchHider]::GetConsoleWindow()
+        if ($hwnd -ne [IntPtr]::Zero) {
+            [void][KuroWinAPI.KuroWatchHider]::ShowWindow($hwnd, 0)
+        }
     }
 } catch { }
 
@@ -74,13 +71,7 @@ function Get-KuroProcesses {
     @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
             ($_.Name -eq "kuro-engine.exe") -or
-            ($_.Name -eq "KuroShell.exe") -or
-            (
-                ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
-                $_.CommandLine -and
-                ($_.CommandLine -match 'Kuro') -and
-                ($_.CommandLine -match '(run_kuro|main)\.py')
-            )
+            ($_.Name -eq "KuroShell.exe")
         })
 }
 
@@ -158,7 +149,6 @@ while ($true) {
             $procs = @(Get-KuroProcesses)
             $shellLive = @($procs | Where-Object { $_.Name -eq "KuroShell.exe" }).Count -gt 0
             $engineLive = @($procs | Where-Object { $_.Name -eq "kuro-engine.exe" }).Count -gt 0
-            $legacyLive = @($procs | Where-Object { $_.Name -match 'python' }).Count -gt 0
             $mutexHeld = Test-KuroMutexHeld
             $hbAge = Get-HeartbeatAgeSeconds
             $heartbeatOk = ($null -ne $hbAge -and $hbAge -ge 0 -and $hbAge -lt $HeartbeatStaleSeconds)

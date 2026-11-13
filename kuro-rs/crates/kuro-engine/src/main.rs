@@ -93,12 +93,10 @@ fn main() {
             "KURO_N8N_BASE_URL",
             "KURO_N8N_TOKEN",
             "OLLAMA_MODEL",
-            "KURO_PYTHON",
             "TUYA_DEVICE_ID",
             "TUYA_LOCAL_KEY",
             "TUYA_IP",
             "TUYA_VERSION",
-            "KURO_TUYA_PYTHON_FALLBACK",
             "KURO_NEONIZE_DLL",
             "KURO_TTS_ENGINE",
             "KURO_PIPER_MODEL",
@@ -120,6 +118,18 @@ fn main() {
     }
     kuro_core::append_rotating_log(&paths.log(), "kuro-engine start", 1_000_000);
     kuro_core::write_heartbeat(&paths.heartbeat());
+    // Keep heartbeat fresh so Watch-Kuro does not treat a live engine as wedged.
+    {
+        let beat = paths.heartbeat();
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(15));
+                kuro_core::write_heartbeat(&beat);
+            }
+        });
+    }
+    // Advertise the same global mutex Python/Watch/KuroShell probe for "engine live".
+    let _singleton_mutex = kuro_core::hold_assistant_mutex();
     let policy = kuro_wifi::WifiPolicy::load(&paths.root);
     if policy.disabled {
         kuro_core::release_singleton(&paths.singleton_lock());
@@ -219,32 +229,6 @@ fn main() {
         set_hud(&state.hud, "idle", "idle", Some(vec![0.0; 11]), "", "", Some(&state.hud_wake));
     }
 
-    if !gate_ci {
-        if let Some(state) = hud.as_ref() {
-            set_hud(
-                &state.hud,
-                "speaking",
-                "Kuro online.",
-                Some(vec![0.0; 11]),
-                "",
-                "Kuro online.",
-                Some(&state.hud_wake),
-            );
-        }
-        std::thread::spawn({
-            let hud = hud.clone();
-            move || {
-                let pcm = kuro_tts::synthesize("Kuro online.");
-                if !pcm.is_empty() {
-                    let _ = kuro_tts::play_pcm(&pcm);
-                }
-                if let Some(state) = hud.as_ref() {
-                    set_hud(&state.hud, "idle", "idle", Some(vec![0.0; 11]), "", "", Some(&state.hud_wake));
-                }
-            }
-        });
-    }
-
     let spec = kuro_hotkey::default_hotkey();
     let down_capture = capture.clone();
     let up_capture = capture.clone();
@@ -297,7 +281,11 @@ fn main() {
         });
     }
 
-    kuro_hotkey::register_and_wait(
+    log_line(&format!(
+        "hotkey arming ctrl={} alt={} shift={} win={} vk=0x{:02X} (LL hook)",
+        spec.ctrl, spec.alt, spec.shift, spec.win, spec.vk
+    ));
+    if let Err(err) = kuro_hotkey::register_and_wait(
         spec,
         move || {
             if down_busy.load(std::sync::atomic::Ordering::Relaxed) {
@@ -625,5 +613,9 @@ fn main() {
             }
             log_line("escape/dismiss");
         },
-    );
+    ) {
+        log_line(&format!("hotkey failed: {err}"));
+        kuro_core::release_singleton(&paths.singleton_lock());
+        std::process::exit(1);
+    }
 }

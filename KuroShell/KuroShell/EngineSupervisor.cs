@@ -23,8 +23,7 @@ public sealed class EngineSupervisor
         var dir = new DirectoryInfo(start);
         for (var i = 0; i < 10 && dir is not null; i++)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "legacy", "python", "run_kuro.py"))
-                || File.Exists(Path.Combine(dir.FullName, "kuro-rs", "Cargo.toml")))
+            if (File.Exists(Path.Combine(dir.FullName, "kuro-rs", "Cargo.toml")))
             {
                 return dir.FullName;
             }
@@ -156,75 +155,53 @@ public sealed class EngineSupervisor
 
     private void Launch()
     {
-        var legacy = string.Equals(Environment.GetEnvironmentVariable("KURO_LEGACY_PYTHON"), "1", StringComparison.Ordinal);
-        var engine = legacy ? null : FindEngine(RepoRoot);
-        if (RepoRoot is null && engine is null)
+        var engine = FindEngine(RepoRoot);
+        if (engine is null)
         {
-            Status = "repo not found";
+            Status = "engine not found";
             Changed?.Invoke();
             return;
         }
 
-        ProcessStartInfo info;
-        if (engine is not null)
+        try
         {
-            try
+            var lockPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Kuro", "kuro.lock");
+            if (File.Exists(lockPath))
             {
-                var lockPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Kuro", "kuro.lock");
-                if (File.Exists(lockPath))
+                var text = File.ReadAllText(lockPath).Trim();
+                if (!int.TryParse(text, out var pid))
                 {
-                    var text = File.ReadAllText(lockPath).Trim();
-                    if (!int.TryParse(text, out var pid))
+                    File.Delete(lockPath);
+                }
+                else
+                {
+                    try
                     {
-                        File.Delete(lockPath);
-                    }
-                    else
-                    {
-                        try
-                        {
-                            var proc = Process.GetProcessById(pid);
-                            if (proc.HasExited)
-                            {
-                                File.Delete(lockPath);
-                            }
-                        }
-                        catch (ArgumentException)
+                        var proc = Process.GetProcessById(pid);
+                        if (proc.HasExited)
                         {
                             File.Delete(lockPath);
                         }
                     }
+                    catch (ArgumentException)
+                    {
+                        File.Delete(lockPath);
+                    }
                 }
             }
-            catch
-            {
-                // Ignore lock cleanup errors
-            }
-
-            info = new ProcessStartInfo
-            {
-                FileName = engine,
-                WorkingDirectory = RepoRoot ?? Path.GetDirectoryName(engine) ?? Environment.CurrentDirectory,
-                CreateNoWindow = true,
-                UseShellExecute = false,
-            };
         }
-        else
+        catch
         {
-            var python = Path.Combine(RepoRoot!, ".venv", "Scripts", "python.exe");
-            if (!File.Exists(python))
-            {
-                python = "python";
-            }
-
-            info = new ProcessStartInfo
-            {
-                FileName = python,
-                Arguments = Path.Combine("legacy", "python", "run_kuro.py"),
-                WorkingDirectory = RepoRoot,
-                CreateNoWindow = true,
-                UseShellExecute = false,
-            };
+            // Ignore lock cleanup errors
         }
+
+        var info = new ProcessStartInfo
+        {
+            FileName = engine,
+            WorkingDirectory = RepoRoot ?? Path.GetDirectoryName(engine) ?? Environment.CurrentDirectory,
+            CreateNoWindow = true,
+            UseShellExecute = false,
+        };
 
         info.Environment["KURO_API"] = "on";
         info.Environment["KURO_HUD_SHOW_TEXT"] = "1";
@@ -233,11 +210,6 @@ public sealed class EngineSupervisor
         if (RepoRoot is not null)
         {
             info.Environment["KURO_ROOT"] = RepoRoot;
-            var venvPython = Path.Combine(RepoRoot, ".venv", "Scripts", "python.exe");
-            if (File.Exists(venvPython))
-            {
-                info.Environment["KURO_PYTHON"] = venvPython;
-            }
         }
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OLLAMA_MODEL")))
         {

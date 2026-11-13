@@ -32,16 +32,6 @@ function Stop-KuroBuildLocks {
     $script:wasRunning = @(Get-Process -Name KuroShell, kuro-engine -ErrorAction SilentlyContinue).Count -gt 0
     Get-Process -Name KuroShell, kuro-engine -ErrorAction SilentlyContinue |
         Stop-Process -Force -ErrorAction SilentlyContinue
-    $python = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-        Where-Object {
-            ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
-            $_.CommandLine -and
-            ($_.CommandLine -match 'Kuro') -and
-            ($_.CommandLine -match '(run_kuro|main)\.py')
-        })
-    foreach ($proc in $python) {
-        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
-    }
     $lock = Join-Path $env:LOCALAPPDATA "Kuro\kuro.lock"
     if (Test-Path -LiteralPath $lock) {
         Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
@@ -76,7 +66,7 @@ try {
 } catch { }
 
 try {
-Write-Host "Stopping KuroShell, kuro-engine, and legacy Python Kuro"
+Write-Host "Stopping KuroShell and kuro-engine"
 Stop-KuroBuildLocks
 Ensure-WhisperGgml
 

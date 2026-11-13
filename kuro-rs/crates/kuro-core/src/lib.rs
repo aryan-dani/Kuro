@@ -141,6 +141,21 @@ pub fn release_singleton(lock_path: &Path) {
     let _ = fs::remove_file(lock_path);
 }
 
+/// Hold `Global\KuroAssistantSingleton.v1` for the process lifetime so Watch/KuroShell
+/// see the native engine the same way they saw the legacy Python mutex.
+#[cfg(windows)]
+pub fn hold_assistant_mutex() -> Option<*mut core::ffi::c_void> {
+    use windows_sys::Win32::System::Threading::CreateMutexW;
+    let name = windows_sys::w!("Global\\KuroAssistantSingleton.v1");
+    let handle = unsafe { CreateMutexW(std::ptr::null(), 1, name) };
+    if handle.is_null() { None } else { Some(handle) }
+}
+
+#[cfg(not(windows))]
+pub fn hold_assistant_mutex() -> Option<*mut core::ffi::c_void> {
+    None
+}
+
 /// Load selected keys from a `.env` file into the process without overwriting existing values.
 /// Never logs secret values.
 pub fn load_env_file(path: &Path, keys: &[&str]) {

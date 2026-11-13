@@ -101,7 +101,7 @@ Models on disk under `bench/models/{router-embed,kokoro,silero-vad}` (mirrored t
 | Peak WS with Whisper+Kokoro+router mapped | **705.7 MB** | unload integration test |
 | WS after dormant unload + `EmptyWorkingSet` | **0.2 MB** | `< 15.0 MB` required; pages fault back on next use |
 | Idle engine WS (API, no warm) | ~14 MB | gate smoke style |
-| Python layout | quarantined | `legacy/python/` only |
+| Python layout | removed | runtime is Rust-only; optional `scripts/bench/*.py` only |
 
 Download helpers: `scripts/Download-RouterEmbed.ps1`, `Download-KokoroModel.ps1`, `Download-SileroVad.ps1`. Measure: `scripts/Measure-KuroOnnx.ps1`.
 

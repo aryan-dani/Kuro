@@ -168,15 +168,11 @@ try {
     Install-KuroTask
 
     if ($StartNow) {
-        Write-Host "Starting Legion mode writer and Kuro supervisor now..."
-        Start-Process -FilePath "powershell.exe" -ArgumentList @(
-            "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-            "-File", $ModeScript
-        ) -WindowStyle Hidden | Out-Null
-        Start-Process -FilePath "powershell.exe" -ArgumentList @(
-            "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-            "-File", $WatchScript
-        ) -WindowStyle Hidden | Out-Null
+        Write-Host "Starting Legion mode writer and Kuro supervisor now (silent)..."
+        $wscriptExe = Join-Path $env:SystemRoot "System32\wscript.exe"
+        $silentVbs = Join-Path $PSScriptRoot "start_kuro_silent.vbs"
+        Start-Process -FilePath $wscriptExe -ArgumentList "//nologo `"$silentVbs`" `"$ModeScript`"" | Out-Null
+        Start-Process -FilePath $wscriptExe -ArgumentList "//nologo `"$silentVbs`"" | Out-Null
     }
 
     "OK $(Get-Date -Format o)" | Set-Content -LiteralPath $InstallLog -Encoding ASCII

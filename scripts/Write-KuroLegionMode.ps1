@@ -12,19 +12,13 @@
 #>
 [CmdletBinding()]
 param(
-    [switch]$Silent,
-    [int]$PollSeconds = 15
+    [switch]$ShowConsole,
+    [int]$PollSeconds = 15,
+    # Kept for start_kuro_silent.vbs callers; ignored (always silent unless -ShowConsole).
+    [switch]$Silent
 )
 
 $ErrorActionPreference = "Continue"
-
-if (-not $Silent) {
-    $vbs = Join-Path $PSScriptRoot "start_kuro_silent.vbs"
-    if (Test-Path -LiteralPath $vbs) {
-        Start-Process "wscript.exe" -ArgumentList ('//nologo "{0}" "{1}"' -f $vbs, $PSCommandPath)
-        return
-    }
-}
 
 if (-not ("KuroConsoleHider" -as [type])) {
     try {
@@ -35,9 +29,11 @@ if (-not ("KuroConsoleHider" -as [type])) {
     } catch { }
 }
 try {
-    $hwnd = [KuroWinAPI.KuroConsoleHider]::GetConsoleWindow()
-    if ($hwnd -ne [IntPtr]::Zero) {
-        [void][KuroWinAPI.KuroConsoleHider]::ShowWindow($hwnd, 0)
+    if (-not $ShowConsole) {
+        $hwnd = [KuroWinAPI.KuroConsoleHider]::GetConsoleWindow()
+        if ($hwnd -ne [IntPtr]::Zero) {
+            [void][KuroWinAPI.KuroConsoleHider]::ShowWindow($hwnd, 0)
+        }
     }
 } catch { }
 

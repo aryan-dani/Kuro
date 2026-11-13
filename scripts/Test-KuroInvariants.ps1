@@ -128,26 +128,29 @@ foreach ($file in $shellSources) {
 }
 
 $allowedPyPatterns = @(
-    '(^|[\\/])legacy[\\/]python[\\/]',
     '(^|[\\/])scripts[\\/]bench[\\/]',
-    '(^|[\\/])scripts[\\/]setup_autostart\.py$',
     '(^|[\\/])scripts[\\/]build_icons\.py$'
 )
 foreach ($rel in Get-TrackedAndStagedFiles) {
     if ($rel -notmatch '\.py$') { continue }
+    $path = Join-Path $Root $rel
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
     $allowed = $false
     foreach ($pat in $allowedPyPatterns) {
         if ($rel -match $pat) { $allowed = $true; break }
     }
     if (-not $allowed) {
-        Add-Fail "Python outside legacy/python quarantine: $rel"
+        Add-Fail "Unexpected Python file (runtime is Rust-only): $rel"
     }
+}
+if (Test-Path -LiteralPath (Join-Path $Root "legacy\python")) {
+    Add-Fail "legacy/python must stay deleted; Kuro is Rust-only"
 }
 if (Test-Path -LiteralPath (Join-Path $Root "tests")) {
   $rootTests = Get-ChildItem -Path (Join-Path $Root "tests") -File -Recurse -ErrorAction SilentlyContinue |
       Where-Object { $_.Extension -eq '.py' }
   if ($rootTests) {
-      Add-Fail "tests/ still contains Python at repo root (use legacy/python/tests)"
+      Add-Fail "tests/ still contains Python at repo root"
   }
 }
 
