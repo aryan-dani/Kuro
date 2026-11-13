@@ -74,7 +74,9 @@ fn pid_alive(pid: u32) -> bool {
         return true;
     }
     use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
-    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+    };
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if handle.is_null() {
@@ -82,8 +84,19 @@ fn pid_alive(pid: u32) -> bool {
         }
         let mut code = 0u32;
         let ok = GetExitCodeProcess(handle, &mut code);
+        if ok == 0 || code != STILL_ACTIVE as u32 {
+            let _ = CloseHandle(handle);
+            return false;
+        }
+        let mut buf = [0u16; 1024];
+        let mut size = buf.len() as u32;
+        let queried = QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut size);
         let _ = CloseHandle(handle);
-        ok != 0 && code == STILL_ACTIVE as u32
+        if queried == 0 {
+            return true;
+        }
+        let name = String::from_utf16_lossy(&buf[..size as usize]).to_ascii_lowercase();
+        name.contains("kuro")
     }
 }
 
@@ -94,10 +107,10 @@ fn pid_alive(pid: u32) -> bool {
 
 fn lock_holder_dead(lock_path: &Path) -> bool {
     let Ok(text) = fs::read_to_string(lock_path) else {
-        return false;
+        return true;
     };
     let Ok(pid) = text.trim().parse::<u32>() else {
-        return false;
+        return true;
     };
     !pid_alive(pid)
 }

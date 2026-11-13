@@ -128,8 +128,17 @@ pub fn register_and_wait(
         if spec.win {
             mods |= MOD_WIN;
         }
-        RegisterHotKey(hwnd, 1, mods | MOD_NOREPEAT, u32::from(spec.vk));
-        RegisterHotKey(hwnd, 2, MOD_NOREPEAT, u32::from(VK_ESCAPE));
+        let mut registered = false;
+        for _ in 0..10 {
+            if RegisterHotKey(hwnd, 1, mods | MOD_NOREPEAT, u32::from(spec.vk)) != 0 {
+                registered = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        if !registered {
+            eprintln!("Failed to register hotkey with modifiers {mods} and vk {}", spec.vk);
+        }
         let mut msg = MSG {
             hwnd: std::ptr::null_mut(),
             message: 0,
@@ -138,31 +147,35 @@ pub fn register_and_wait(
             time: 0,
             pt: windows_sys::Win32::Foundation::POINT { x: 0, y: 0 },
         };
-        while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
-            if msg.message == WM_HOTKEY {
-                if msg.wParam == 2 {
-                    on_escape();
-                } else {
-                    on_down();
-                    // RegisterHotKey consumes the trigger VK (Space), so GetAsyncKeyState for
-                    // that key often already reads "up" on the first poll. Hold-to-talk is
-                    // therefore gated on the required *modifiers* staying down.
-                    loop {
-                        std::thread::sleep(RELEASE_POLL);
-                        let ctrl_down = !spec.ctrl || (GetAsyncKeyState(0x11) as u16) & 0x8000 != 0;
-                        let alt_down = !spec.alt || (GetAsyncKeyState(0x12) as u16) & 0x8000 != 0;
-                        let shift_down = !spec.shift || (GetAsyncKeyState(0x10) as u16) & 0x8000 != 0;
-                        let win_down = !spec.win
-                            || (GetAsyncKeyState(0x5B) as u16) & 0x8000 != 0
-                            || (GetAsyncKeyState(0x5C) as u16) & 0x8000 != 0;
-                        if !(ctrl_down && alt_down && shift_down && win_down) {
-                            on_up();
-                            break;
-                        }
-                        if (GetAsyncKeyState(i32::from(VK_ESCAPE)) as u16) & 0x8000 != 0 {
-                            on_escape();
-                            break;
-                        }
+        loop {
+            let res = GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0);
+            if res == 0 {
+                break;
+            }
+            if res == -1 {
+                std::thread::sleep(Duration::from_millis(25));
+                continue;
+            }
+            if msg.message == WM_HOTKEY && msg.wParam == 1 {
+                on_down();
+                // RegisterHotKey consumes the trigger VK (Space), so GetAsyncKeyState for
+                // that key often already reads "up" on the first poll. Hold-to-talk is
+                // therefore gated on the required *modifiers* staying down.
+                loop {
+                    std::thread::sleep(RELEASE_POLL);
+                    let ctrl_down = !spec.ctrl || (GetAsyncKeyState(0x11) as u16) & 0x8000 != 0;
+                    let alt_down = !spec.alt || (GetAsyncKeyState(0x12) as u16) & 0x8000 != 0;
+                    let shift_down = !spec.shift || (GetAsyncKeyState(0x10) as u16) & 0x8000 != 0;
+                    let win_down = !spec.win
+                        || (GetAsyncKeyState(0x5B) as u16) & 0x8000 != 0
+                        || (GetAsyncKeyState(0x5C) as u16) & 0x8000 != 0;
+                    if !(ctrl_down && alt_down && shift_down && win_down) {
+                        on_up();
+                        break;
+                    }
+                    if (GetAsyncKeyState(i32::from(VK_ESCAPE)) as u16) & 0x8000 != 0 {
+                        on_escape();
+                        break;
                     }
                 }
             }

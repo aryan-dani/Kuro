@@ -114,12 +114,12 @@ fn main() {
     }
     let paths = kuro_core::KuroPaths::from_env();
     let _ = std::fs::create_dir_all(&paths.root);
-    kuro_core::append_rotating_log(&paths.log(), "kuro-engine start", 1_000_000);
-    kuro_core::write_heartbeat(&paths.heartbeat());
     if !kuro_core::try_singleton(&paths.singleton_lock()) {
         eprintln!("Kuro engine is already running.");
         std::process::exit(0);
     }
+    kuro_core::append_rotating_log(&paths.log(), "kuro-engine start", 1_000_000);
+    kuro_core::write_heartbeat(&paths.heartbeat());
     let policy = kuro_wifi::WifiPolicy::load(&paths.root);
     if policy.disabled {
         kuro_core::release_singleton(&paths.singleton_lock());
