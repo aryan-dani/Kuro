@@ -90,7 +90,7 @@ aes-gcm = "0.10"
 libloading = "0.8"
 rtrb = "0.3"
 ort = { version = "2.0.0-rc.15", default-features = true }
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
     "Media_SpeechSynthesis",
     "Media_Core",
     "Storage_Streams",
