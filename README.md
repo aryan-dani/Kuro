@@ -1,48 +1,56 @@
 ![Kuro](assets/branding/kuro-logo-full.svg)
 
-Kuro is a Windows desk voice agent. Hold Ctrl+Alt+Space, speak, and release. The native engine transcribes with local Whisper weights, routes phrases first, and speaks with Kokoro/Piper. Anything the phrases do not handle can still go to the local Ollama model.
+# Kuro
 
-The desk plug and the news feed stay on the hub at `http://100.78.60.50:18200`. Mail goes out through Telegram via n8n Cloud. The hotkey is owned by `kuro-engine.exe`, not by the shell.
+Windows desk voice agent. Hold **Ctrl+Alt+Space**, speak, release. Local Whisper
+STT, phrase-first routing, Kokoro/Piper TTS. Optional local LLM via Ollama.
 
-## Shell and engine
+This repo is being shaped as a public template. See
+[docs/plans/README.md](docs/plans/README.md) and [AGENTS.md](AGENTS.md).
 
-`kuro-engine.exe` is the voice process. It serves `127.0.0.1:8765` when `KURO_API=on`, watches home Wi-Fi, and holds Ctrl+Alt+Space. Whisper weights stay in a worker that starts in the background at launch and exits when Kuro is away from home or when `/shutdown` runs.
+## Requirements
 
-`KuroShell` is the WinUI 3 tray + always-on-top mark. When the shell is running it owns the tray and the on-screen mark, and it starts `kuro-engine.exe` with `KURO_API=on`.
+- Windows 10 19041+ (x64, AVX2 recommended)
+- Rust stable (see `kuro-rs/rust-toolchain.toml`)
+- .NET 10 SDK
+- LLVM (libclang) and MSVC build tools for native crates
 
-## Run
-
-Build the engine and both shell configurations:
+## Quickstart
 
 ```powershell
+git clone <this-repo>
+cd Kuro
+cargo run -p kuro-cli -- init --defaults
 .\scripts\Build-KuroNative.ps1
-```
-
-Before you commit, run the full gate and install hooks once per clone:
-
-```powershell
-.\scripts\Test-KuroGate.ps1
 .\scripts\Install-GitHooks.ps1
-```
-
-Then, from the repo root:
-
-```powershell
 .\scripts\Start-Kuro.ps1
 ```
 
-Silent logon autostart (no console windows):
+Before every commit:
 
 ```powershell
-.\scripts\Install-KuroAutostart.ps1 -StartNow
+cargo xtask gate fast
 ```
 
-Brand files live in `assets/branding/`. Regenerate tray icons with:
+After clone, run `cargo run -p kuro-cli -- init --defaults` to install the example
+profile under `%LOCALAPPDATA%\Kuro\profile` (or `KURO_DATA_DIR\profile`). Use
+`cargo run -p kuro-cli -- doctor` or `doctor --json` before reporting issues.
+Optional: copy `.env.example` to a gitignored `.env` for developer overrides.
 
-```powershell
-python .\scripts\build_icons.py
-```
+Optional adapters (Meet, WhatsApp, remote hub, n8n) stay **off** until you set
+their env keys. There is no hard-coded LAN or Tailscale address in the product
+defaults.
 
-## Brand
+## Layout
 
-Paper `#F5F4EE`, white `#FFFFFF`, ink `#141414`, muted `#52514E`. Settings corners are square. Titles use Space Grotesk. Labels use JetBrains Mono. The chat card under the pill uses Poppins with a 22 px radius. Fonts are bundled under `KuroShell/KuroShell/Assets/Fonts` with their OFL licenses. Do not commit `.env`, `api_token`, or anything under `%LOCALAPPDATA%\Kuro`.
+| Path | Role |
+|------|------|
+| `kuro-rs/` | Engine, router, tools, IPC |
+| `KuroShell/` | WinUI tray, HUD, settings |
+| `contract/v1/` | Golden API/HUD fixtures |
+| `docs/adr/` | Architecture decisions |
+| `docs/plans/` | Phase plan (00 to 26) |
+
+## License
+
+MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

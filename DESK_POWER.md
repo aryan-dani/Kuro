@@ -7,7 +7,7 @@ The Tuya smart plug switches the **extension board** that feeds desk lights and 
 - **Always-on wall outlet:** laptop charger, Wi‑Fi router / mesh (required so the plug can be commanded).
 - **Smart plug → extension board:** monitor, lights, other desk accessories.
 
-Do **not** put the router on the switched board — if Wi‑Fi dies when the board is off, voice cannot turn the desk back on. The plug’s physical button remains the manual override.
+Do **not** put the router on the switched board - if Wi‑Fi dies when the board is off, voice cannot turn the desk back on. The plug’s physical button remains the manual override.
 
 ## Voice
 

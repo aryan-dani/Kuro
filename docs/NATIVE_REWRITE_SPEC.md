@@ -25,7 +25,7 @@ Ship a performance rewrite: lower idle RAM, lower VRAM when dormant, lower time-
    - Capsule: black bottom pill (existing shell). Chat card under the pill: Poppins, radius 22, panel `#0A0A0A`, ink `#F0F0F0`, muted `#A3A3A3`. Do not restyle these as part of the rewrite.
    - No emoji in UI copy, logs, comments, or documentation.
 6. Secrets and local state stay under `%LOCALAPPDATA%\Kuro` or ignored files. Never commit `.env`, `api_token`, `credentials.json`, `token.json`, Tuya cache, or timing CSVs.
-7. Hub default base `http://100.78.60.50:18200` for desk rituals when configured. Local LAN Tuya remains the laptop fallback for the plug. Email-to-Telegram triage stays on n8n Cloud (`N8N_INBOX_WEBHOOK_URL`). Self-hosted n8n voice workflows use `KURO_N8N_BASE_URL` (default `http://100.78.60.50:5678/webhook`).
+7. Desk hub rituals use `KURO_HUB_URL` with `KURO_HUB_TOKEN`; there is no hard-coded default (example base `http://127.0.0.1:18200`). Local LAN Tuya remains the laptop fallback for the plug. Email-to-Telegram triage stays on n8n Cloud (`N8N_INBOX_WEBHOOK_URL`). Self-hosted n8n voice workflows use `KURO_N8N_BASE_URL` with no hard-coded default (example `http://127.0.0.1:5678/webhook`).
 8. Full phrase catalog, tools, Meet, WhatsApp, n8n registry, Ollama fallback, timing CSV shape, dismiss turn-epoch, follow-up listen after `?`, and early daddy-home fire must be preserved.
 9. TTS wire values stay `auto|xtts|piper|pyttsx3`. Product acceptance for `kuro-engine.exe`: `auto` and `piper` use native Rust ONNX (`KURO_PIPER_MODEL` via `ort` or `sherpa-onnx`, sentence streaming, clip cache) on AC and battery, with no resident Python or PyTorch. `pyttsx3` maps to Windows SAPI / WinRT `SpeechSynthesizer`. Forced `xtts` may call an on-demand external helper or fall back to native Piper ONNX. The engine process stays free of a resident Python/PyTorch runtime.
 10. Hub timeouts stay as coded: command 8s, tools list 5s, tool exec 30s, health 3s. A 2s hub timeout is not the current contract.
@@ -54,7 +54,7 @@ User (Ctrl+Alt+Space)
    |        |        \
    |        |         \-- Ollama 127.0.0.1:11434 (lazy)
    |        |
-   |        +-- Hub  http://100.78.60.50:18200  (desk rituals when token set)
+   |        +-- Hub  KURO_HUB_URL (e.g. http://127.0.0.1:18200 when token set)
    |        +-- n8n self-host  ...:5678/webhook  (named workflows)
    |        +-- n8n Cloud inbox webhook
    |
@@ -206,7 +206,7 @@ Hub client music `client_actions`: `pause`, `resume`, `stop`, `play` with `track
 
 ## 7. Hub wire format (`hub_client.py`)
 
-Base: `KURO_HUB_URL` default `http://100.78.60.50:18200`. Enabled only when URL and `KURO_HUB_TOKEN` are both set.
+Base: `KURO_HUB_URL` (no hard-coded default; example `http://127.0.0.1:18200`). Enabled only when URL and `KURO_HUB_TOKEN` are both set.
 
 Auth: `Authorization: Bearer <token>`, `Content-Type: application/json`.
 
@@ -240,11 +240,11 @@ Self-hosted n8n (`KURO_N8N_*`) is a separate client from the hub.
 | --- | --- | --- |
 | GET | `/status` | `{ok, paused, state, api, logs}` |
 | GET | `/config` | `{llm_mode, stt_backend, tts_engine, xtts_language, paused, hud_show_text, plug_id_masked}` |
-| PUT | `/config` | Whitelist only: `llm_mode` (`off`\|`fallback`\|`always`), `stt_backend` (`auto`\|`cuda`\|`npu`\|`cpu`), `tts_engine` (`auto`\|`xtts`\|`piper`\|`pyttsx3`), `xtts_language` (2–8 alpha), `paused` bool, `hud_show_text` bool. Unknown field or secrets: 400. |
+| PUT | `/config` | Whitelist only: `llm_mode` (`off`\|`fallback`\|`always`), `stt_backend` (`auto`\|`cuda`\|`npu`\|`cpu`), `tts_engine` (`auto`\|`xtts`\|`piper`\|`pyttsx3`), `xtts_language` (2-8 alpha), `paused` bool, `hud_show_text` bool. Unknown field or secrets: 400. |
 | GET | `/workflows` | Registry JSON or `{workflows:{}}` |
 | PUT | `/workflows` | Valid registry; webhook paths must not contain `://` |
 | GET | `/contacts` | `{contacts: {name: masked}}` |
-| PUT | `/contacts` | Merge; `""` deletes a name; digit length 8–15 |
+| PUT | `/contacts` | Merge; `""` deletes a name; digit length 8-15 |
 | GET | `/timing` | `{rows:[{kind,stage,ms}]}` last 20 |
 | POST | `/say` | `{"text"}` -> `{matched, reply}` via phrase router only |
 | POST | `/thread/clear` | Clears Ollama thread (cap 20 turns in `brain.py`) |
@@ -302,7 +302,7 @@ Self-hosted n8n (`KURO_N8N_*`) is a separate client from the hub.
 | `KURO_HUD_SHOW_TEXT` | Include transcripts on `/events` |
 | `KURO_TIMING` | Write `%LOCALAPPDATA%\Kuro\timing.csv` |
 | `KURO_HOME_SSID` | Wi-Fi watch home SSIDs (comma-separated) |
-| `KURO_LEGACY_PYTHON` | Removed — Rust-only |
+| `KURO_LEGACY_PYTHON` | Removed - Rust-only |
 
 Never put secret values in the repo or this doc.
 
@@ -398,12 +398,12 @@ When `KURO_TIMING` is on, append rows to `%LOCALAPPDATA%\Kuro\timing.csv`:
 
 ### 14.1 Python (`pytest`)
 
-- `tests/test_engine_api.py` — token, config whitelist, contacts/workflows, `/say`, dismiss, event frame text gating, thread clear
-- `tests/test_n8n.py` — aliases, phrase routing, HTTP cases, registry parse
-- `tests/test_whatsapp.py` — phrasings, contacts, clipboard vs desk power
-- `tests/test_meet.py` — phrasings, missing login spoken, unknown contact
-- `tests/test_timing.py` — CSV stages only; disabled writes nothing
-- `tests/test_brain_thread.py` — follow-up memory and 20-turn cap / clear
+- `tests/test_engine_api.py` - token, config whitelist, contacts/workflows, `/say`, dismiss, event frame text gating, thread clear
+- `tests/test_n8n.py` - aliases, phrase routing, HTTP cases, registry parse
+- `tests/test_whatsapp.py` - phrasings, contacts, clipboard vs desk power
+- `tests/test_meet.py` - phrasings, missing login spoken, unknown contact
+- `tests/test_timing.py` - CSV stages only; disabled writes nothing
+- `tests/test_brain_thread.py` - follow-up memory and 20-turn cap / clear
 
 ### 14.2 Shell
 
@@ -423,10 +423,10 @@ Retain `docs/SHELL.md` manual steps: attach without double engine, PTT capsule T
 
 Do not start these until this document is the working checklist.
 
-1. **Phase 2 — Rust core:** workspace `kuro-rs/` with `kuro-hotkey` (`RegisterHotKey` + release poll), `kuro-router` (full phrase + hub + Tuya + Ollama clients), `kuro-wifi`, `kuro-ipc` (exact `127.0.0.1:8765` contract). `cargo test` mirrors the Python suite above.
-2. **Phase 3 — Audio / STT / TTS:** WASAPI capture, unified Whisper ONNX / Sherpa with CUDA / OpenVINO / DirectML / CPU selection matching `compute_policy`, TTS backends with XTTS-compatible path retained until Kokoro acceptance, timing CSV parity.
-3. **Phase 4 — Shell:** spawn `kuro-engine.exe` by default; source-generated JSON; no move/resize on HUD state ticks; `dotnet test` green.
-4. **Phase 5 — Scripts / benchmarks:** `scripts/Build-KuroNative.ps1`, update `scripts/Start-Kuro.ps1`, compare idle RAM / VRAM / voice latency to the Python baseline in `docs/PERF_BASELINE.md` / `docs/PERF_RESULTS.md`.
+1. **Phase 2 - Rust core:** workspace `kuro-rs/` with `kuro-hotkey` (`RegisterHotKey` + release poll), `kuro-router` (full phrase + hub + Tuya + Ollama clients), `kuro-wifi`, `kuro-ipc` (exact `127.0.0.1:8765` contract). `cargo test` mirrors the Python suite above.
+2. **Phase 3 - Audio / STT / TTS:** WASAPI capture, unified Whisper ONNX / Sherpa with CUDA / OpenVINO / DirectML / CPU selection matching `compute_policy`, TTS backends with XTTS-compatible path retained until Kokoro acceptance, timing CSV parity.
+3. **Phase 4 - Shell:** spawn `kuro-engine.exe` by default; source-generated JSON; no move/resize on HUD state ticks; `dotnet test` green.
+4. **Phase 5 - Scripts / benchmarks:** `scripts/Build-KuroNative.ps1`, update `scripts/Start-Kuro.ps1`, compare idle RAM / VRAM / voice latency to the Python baseline in `docs/PERF_BASELINE.md` / `docs/PERF_RESULTS.md`.
 
 Additive options after wire parity: named pipe IPC, headless Win32 tray + Direct2D mark when API is off, Kokoro as an extra TTS engine.
 
