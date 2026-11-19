@@ -1,0 +1,145 @@
+[[case]]
+id = "adv-llm-0"
+input = "I wanted to understand how to build a large language model from scratch. Can you help me?"
+normalized = "i wanted to understand how to build a large language model from scratch can you help me"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-1"
+input = "im stuck on a rust borrow checker error can you help me"
+normalized = "im stuck on a rust borrow checker error can you help me"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-2"
+input = "can you help me write an email to my professor about deadlines"
+normalized = "can you help me write an email to my professor about deadlines"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-3"
+input = "email my professor about deadlines and can you help me"
+normalized = "email my professor about deadlines and can you help me"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-4"
+input = "why does my monitor turn off when i play games please help"
+normalized = "why does my monitor turn off when i play games please help"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-5"
+input = "borrow checker can you help me"
+normalized = "borrow checker can you help me"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-6"
+input = "how do I train a transformer from scratch help me understand"
+normalized = "how do i train a transformer from scratch help me understand"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-7"
+input = "can you help me debug this python segmentation fault"
+normalized = "can you help me debug this python segmentation fault"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-8"
+input = "explain quantum field theory and help me with homework"
+normalized = "explain quantum field theory and help me with homework"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-llm-9"
+input = "write a novel for me can you help me plan chapters"
+normalized = "write a novel for me can you help me plan chapters"
+stage = "llm"
+intent = "Llm"
+handled = false
+
+[[case]]
+id = "adv-help-short"
+input = "help"
+normalized = "help"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+reply_contains = "Desk"
+handled = true
+
+[[case]]
+id = "adv-help-me-short"
+input = "help me"
+normalized = "help me"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+reply_contains = "Desk"
+handled = true
+
+[[case]]
+id = "adv-what-can-you-do"
+input = "what can you do"
+normalized = "what can you do"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+handled = true
+
+[[case]]
+id = "adv-capabilities"
+input = "capabilities"
+normalized = "capabilities"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+handled = true
+
+[[case]]
+id = "adv-list-commands"
+input = "list commands"
+normalized = "list commands"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+handled = true
+
+[[case]]
+id = "adv-can-you-help"
+input = "can you help"
+normalized = "can you help"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+handled = true
+
+[[case]]
+id = "adv-can-you-help-me"
+input = "can you help me"
+normalized = "can you help me"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+handled = true
+

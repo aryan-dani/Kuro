@@ -1,0 +1,653 @@
+[[case]]
+id = "desk-on-0"
+input = "desk on"
+normalized = "desk on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-1"
+input = "Desk on."
+normalized = "desk on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-2"
+input = "turn on the desk"
+normalized = "turn on the desk"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-3"
+input = "switch on the monitor"
+normalized = "switch on the monitor"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-4"
+input = "monitor on"
+normalized = "monitor on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-5"
+input = "screen on"
+normalized = "screen on"
+stage = "pattern"
+intent = "ReadScreen"
+tool = "read_screen"
+args = {  }
+reply = "Success: Screen says hello."
+handled = true
+
+[[case]]
+id = "desk-on-6"
+input = "display on"
+normalized = "display on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-7"
+input = "lights on"
+normalized = "lights on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-8"
+input = "light on"
+normalized = "light on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-9"
+input = "plug on"
+normalized = "plug on"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-10"
+input = "power on"
+normalized = "power on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-11"
+input = "turn on monitor"
+normalized = "turn on monitor"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-12"
+input = "switch on desk"
+normalized = "switch on desk"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-13"
+input = "put the desk on"
+normalized = "put the desk on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-14"
+input = "desk turn on please"
+normalized = "desk turn on please"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-15"
+input = "please desk on"
+normalized = "please desk on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-16"
+input = "monitor switch on"
+normalized = "monitor switch on"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-17"
+input = "screen turn on"
+normalized = "screen turn on"
+stage = "pattern"
+intent = "ReadScreen"
+tool = "read_screen"
+args = {  }
+reply = "Success: Screen says hello."
+handled = true
+
+[[case]]
+id = "desk-on-18"
+input = "turn the display on"
+normalized = "turn the display on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-19"
+input = "lights switch on"
+normalized = "lights switch on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-20"
+input = "extension on please"
+normalized = "extension on please"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-21"
+input = "board on"
+normalized = "board on"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-22"
+input = "charger on"
+normalized = "charger on"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-23"
+input = "turn on the screen"
+normalized = "turn on the screen"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-24"
+input = "switch on the display"
+normalized = "switch on the display"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-25"
+input = "desk on please"
+normalized = "desk on please"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-26"
+input = "monitor on now"
+normalized = "monitor on now"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-on-27"
+input = "turn on desk lights"
+normalized = "turn on desk lights"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "desk-off-0"
+input = "desk off"
+normalized = "desk offf"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-1"
+input = "turn off the desk"
+normalized = "turn off the desk"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-2"
+input = "switch off monitor"
+normalized = "switch off monitor"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-3"
+input = "monitor off"
+normalized = "monitor offf"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-4"
+input = "screen off"
+normalized = "screen offf"
+stage = "pattern"
+intent = "ReadScreen"
+tool = "read_screen"
+args = {  }
+reply = "Success: Screen says hello."
+handled = true
+
+[[case]]
+id = "desk-off-5"
+input = "display off"
+normalized = "display offf"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-6"
+input = "lights off"
+normalized = "lights offf"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-7"
+input = "light off"
+normalized = "light offf"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-8"
+input = "plug off"
+normalized = "plug offf"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-9"
+input = "power off"
+normalized = "power offf"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-10"
+input = "power down"
+normalized = "power down"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-11"
+input = "turn off monitor"
+normalized = "turn off monitor"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-12"
+input = "switch off desk"
+normalized = "switch off desk"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-13"
+input = "desk turn off"
+normalized = "desk turn off"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-14"
+input = "please desk off"
+normalized = "please desk offf"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-15"
+input = "monitor switch off"
+normalized = "monitor switch off"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-16"
+input = "screen turn off"
+normalized = "screen turn off"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-17"
+input = "turn the display off"
+normalized = "turn the display offf"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-18"
+input = "lights switch off"
+normalized = "lights switch off"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-19"
+input = "extension off"
+normalized = "extension off"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-20"
+input = "board off"
+normalized = "board offf"
+stage = "pattern"
+handled = false
+
+[[case]]
+id = "desk-off-21"
+input = "turn off the screen"
+normalized = "turn off the screen"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-22"
+input = "switch off the display"
+normalized = "switch off the display"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-23"
+input = "desk off please"
+normalized = "desk offf please"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-24"
+input = "monitor off now"
+normalized = "monitor offf now"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-25"
+input = "bob it off"
+normalized = "power off"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-26"
+input = "lets off"
+normalized = "desk off"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-27"
+input = "let's off"
+normalized = "desk off"
+stage = "pattern"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-off-28"
+input = "monitor of please"
+normalized = "monitor off please"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "desk-good-night"
+input = "good night sir"
+normalized = "goodnight sir"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "good_night" }
+reply = "Desk off. Good night, sir."
+handled = true
+
+[[case]]
+id = "desk-goodnight-compound"
+input = "goodnight"
+normalized = "goodnight"
+stage = "pattern"
+intent = "GoodNight"
+tool = "control_smart_plug"
+args = { scene = "good_night" }
+reply = "Desk off. Good night, sir."
+handled = true
+
+[[case]]
+id = "desk-night-only"
+input = "night"
+normalized = "night"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "good_night" }
+reply = "Desk off. Good night, sir."
+handled = true
+
+[[case]]
+id = "desk-sleep"
+input = "sleep"
+normalized = "sleep"
+stage = "pattern"
+tool = "control_smart_plug"
+args = { scene = "good_night" }
+reply = "Desk off. Good night, sir."
+handled = true
+
+[[case]]
+id = "desk-question-not-power"
+input = "why does my monitor turn off when i play games"
+normalized = "why does my monitor turn off when i play games"
+stage = "llm"
+intent = "Llm"
+handled = false
+

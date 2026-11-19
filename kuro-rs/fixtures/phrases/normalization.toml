@@ -1,0 +1,196 @@
+[[case]]
+id = "norm-daddys-home"
+input = "Daddy's home"
+normalized = "daddy home"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "norm-daddys-back"
+input = "daddys back"
+normalized = "daddy back"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "norm-dadi-here"
+input = "dadi is here"
+normalized = "daddy is here"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "norm-wake-up"
+input = "wake up daddy"
+normalized = "wakeup daddy"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "norm-wake-hyphen"
+input = "wake-up please"
+normalized = "wakeup please"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "norm-woke-up"
+input = "woke up now"
+normalized = "wakeup now"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "norm-good-night"
+input = "good night sir"
+normalized = "goodnight sir"
+tool = "control_smart_plug"
+args = { scene = "good_night" }
+reply = "Desk off. Good night, sir."
+handled = true
+
+[[case]]
+id = "norm-in-his-home"
+input = "in his home"
+normalized = "in daddy home"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "norm-whats-news"
+input = "what's the news"
+normalized = "whats the news"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "norm-moniter"
+input = "moniter please"
+normalized = "monitor please"
+handled = false
+
+[[case]]
+id = "norm-extention"
+input = "extention off"
+normalized = "extension off"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "norm-monitor-of"
+input = "monitor of please"
+normalized = "monitor off please"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "norm-lets-off-apostrophe"
+input = "let's off"
+normalized = "desk off"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "norm-lets-off"
+input = "lets off"
+normalized = "desk off"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "norm-bob-it-off"
+input = "bob it off"
+normalized = "power off"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "norm-urgent-man"
+input = "urgent man"
+normalized = "urgent mail"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "urgent" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "norm-clipboard-punct"
+input = "Send my Clipboard!"
+normalized = "send my clipboard"
+intent = "SendWhatsapp"
+reply = "I don't know who to message."
+handled = true
+
+[[case]]
+id = "norm-at-his-home"
+input = "at his home"
+normalized = "at daddy home"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "norm-screen-of"
+input = "screen of please"
+normalized = "screen off please"
+intent = "ReadScreen"
+tool = "read_screen"
+args = {  }
+reply = "Success: Screen says hello."
+handled = true
+
+[[case]]
+id = "norm-desk-of"
+input = "desk of please"
+normalized = "desk off please"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "norm-urgent-men"
+input = "urgent men"
+normalized = "urgent mail"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "urgent" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "norm-next-off"
+input = "next off"
+normalized = "desk off"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+

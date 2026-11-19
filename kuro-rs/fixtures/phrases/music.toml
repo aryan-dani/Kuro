@@ -1,0 +1,322 @@
+[[case]]
+id = "music-pause-0"
+input = "pause the song"
+normalized = "pause the song"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-1"
+input = "pause music"
+normalized = "pause music"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-2"
+input = "pause the track"
+normalized = "pause the track"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-3"
+input = "pause audio"
+normalized = "pause audio"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-4"
+input = "pause media"
+normalized = "pause media"
+stage = "pattern"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-5"
+input = "pause"
+normalized = "pause"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-6"
+input = "pause it"
+normalized = "pause it"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-7"
+input = "pause please"
+normalized = "pause please"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-8"
+input = "pause that"
+normalized = "pause that"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-9"
+input = "can you pause the song"
+normalized = "can you pause the song"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-10"
+input = "please pause music"
+normalized = "please pause music"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-11"
+input = "pause the music now"
+normalized = "pause the music now"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-pause-12"
+input = "hey pause the track"
+normalized = "hey pause the track"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-resume-0"
+input = "resume music"
+normalized = "resume music"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-1"
+input = "resume song"
+normalized = "resume song"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-2"
+input = "unpause"
+normalized = "unpause"
+stage = "pattern"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-3"
+input = "continue the song"
+normalized = "continue the song"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-4"
+input = "continue music"
+normalized = "continue music"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-5"
+input = "play the song"
+normalized = "play the song"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-6"
+input = "play music"
+normalized = "play music"
+stage = "pattern"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-7"
+input = "keep playing"
+normalized = "keep playing"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-8"
+input = "resume the track"
+normalized = "resume the track"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-resume-9"
+input = "please resume music"
+normalized = "please resume music"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-resume-10"
+input = "unpause the song"
+normalized = "unpause the song"
+stage = "pattern"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-resume-11"
+input = "continue playing music"
+normalized = "continue playing music"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "music-stop-0"
+input = "stop the music"
+normalized = "stop the music"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-stop-1"
+input = "stop music"
+normalized = "stop music"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-stop-2"
+input = "stop the song"
+normalized = "stop the song"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-stop-3"
+input = "stop the track"
+normalized = "stop the track"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "music-stop-4"
+input = "close the music"
+normalized = "close the music"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-stop-5"
+input = "shut off the song"
+normalized = "shut off the song"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-stop-6"
+input = "shut down music"
+normalized = "shut down music"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-stop-7"
+input = "kill the music"
+normalized = "kill the music"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-stop-8"
+input = "stop media please"
+normalized = "stop media please"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-stop-9"
+input = "please stop the song"
+normalized = "please stop the song"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "music-desk-not-pause"
+input = "desk on"
+normalized = "desk on"
+stage = "exact"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+

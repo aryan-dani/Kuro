@@ -1,0 +1,13 @@
+{
+  "body": {
+    "api": true,
+    "logs": "<volatile>",
+    "ok": true,
+    "paused": false,
+    "protocol": 1,
+    "router_mode": "semantic_onnx",
+    "state": "hidden",
+    "tts_active": "kokoro"
+  },
+  "status": 200
+}

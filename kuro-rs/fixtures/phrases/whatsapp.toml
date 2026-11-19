@@ -1,0 +1,259 @@
+[[case]]
+id = "wa-parity-0"
+input = "send this link to siya on whatsapp"
+normalized = "send this link to siya on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "siya", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-1"
+input = "send the meeting link to siya on whatsapp"
+normalized = "send the meeting link to siya on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "siya", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-2"
+input = "send my clipboard to siya via whatsapp"
+normalized = "send my clipboard to siya via whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "siya", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-3"
+input = "please send the link to siya in whatsapp"
+normalized = "please send the link to siya in whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "siya", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-4"
+input = "whatsapp siya this link"
+normalized = "whatsapp siya this link"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "siya", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-5"
+input = "whatsapp siya the link"
+normalized = "whatsapp siya the link"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "siya", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-6"
+input = "hey kuro send this link to siya on whatsapp"
+normalized = "hey kuro send this link to siya on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "siya", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-7"
+input = "can you send clipboard to aryan on whatsapp"
+normalized = "can you send clipboard to aryan on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "aryan", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-8"
+input = "send the message to siya on whatsapp"
+normalized = "send the message to siya on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "siya", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-9"
+input = "send me my clipboard on whatsapp"
+normalized = "send me my clipboard on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-10"
+input = "send me the link on whatsapp"
+normalized = "send me the link on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-11"
+input = "send my clipboard on whatsapp"
+normalized = "send my clipboard on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-12"
+input = "send the link on whatsapp"
+normalized = "send the link on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-13"
+input = "send clipboard on whatsapp"
+normalized = "send clipboard on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-14"
+input = "send my clipboard history on whatsapp"
+normalized = "send my clipboard history on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-parity-15"
+input = "send me my clipboard history on whatsapp"
+normalized = "send me my clipboard history on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-neutral-0"
+input = "send this link to alex on whatsapp"
+normalized = "send this link to alex on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "alex", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-neutral-1"
+input = "send my clipboard to sam via whatsapp"
+normalized = "send my clipboard to sam via whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "sam", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-neutral-2"
+input = "whatsapp alex the link"
+normalized = "whatsapp alex the link"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "alex", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-neutral-3"
+input = "send the meeting link to sam on whatsapp"
+normalized = "send the meeting link to sam on whatsapp"
+stage = "pattern"
+tool = "send_whatsapp"
+args = { contact = "sam", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-neutral-4"
+input = "can you send clipboard to alex on whatsapp"
+normalized = "can you send clipboard to alex on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "alex", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-neutral-5"
+input = "send the message to sam on whatsapp"
+normalized = "send the message to sam on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "sam", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "wa-no-whatsapp-word"
+input = "send this link to siya"
+normalized = "send this link to siya"
+stage = "none"
+handled = false
+
+[[case]]
+id = "wa-desk-off-not-wa"
+input = "desk off"
+normalized = "desk offf"
+stage = "exact"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+

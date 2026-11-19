@@ -1,0 +1,110 @@
+[[case]]
+id = "cb-send-clipboard-wa"
+input = "Send my clipboard to me on WhatsApp."
+normalized = "send my clipboard to me on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "cb-not-power-on"
+input = "Send my clipboard to me on WhatsApp."
+normalized = "send my clipboard to me on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "cb-clipboard-word-on"
+input = "send my clipboard on whatsapp"
+normalized = "send my clipboard on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "cb-board-in-clipboard"
+input = "send my clipboard to alex on whatsapp"
+normalized = "send my clipboard to alex on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "alex", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "cb-link-not-desk"
+input = "send the link on whatsapp"
+normalized = "send the link on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "browser_url", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "cb-me-clipboard"
+input = "send me my clipboard on whatsapp"
+normalized = "send me my clipboard on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "cb-desk-on-still-power"
+input = "desk on"
+normalized = "desk on"
+stage = "exact"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "cb-monitor-on-power"
+input = "monitor on"
+normalized = "monitor on"
+stage = "pattern"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "cb-clipboard-history"
+input = "send my clipboard history on whatsapp"
+normalized = "send my clipboard history on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+
+[[case]]
+id = "cb-plain-clipboard"
+input = "send clipboard on whatsapp"
+normalized = "send clipboard on whatsapp"
+stage = "pattern"
+intent = "SendWhatsapp"
+tool = "send_whatsapp"
+args = { contact = "me", source = "clipboard", text = "" }
+reply = "Sent."
+handled = true
+

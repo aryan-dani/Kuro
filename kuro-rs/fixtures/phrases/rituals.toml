@@ -1,0 +1,114 @@
+# Cases run in file order due to cooldowns. First daddy home should expect Welcome; immediate repeats expect Already on it.
+[[case]]
+id = "rit-daddy-first"
+input = "daddy's home"
+normalized = "daddy home"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Welcome home, sir."
+reply_contains = "Welcome"
+handled = true
+
+[[case]]
+id = "rit-wakeup-repeat"
+input = "wakeup daddy"
+normalized = "wakeup daddy"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+reply_contains = "Already on it"
+handled = true
+
+[[case]]
+id = "rit-daddys-back"
+input = "daddys back"
+normalized = "daddy back"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "rit-dadi-here"
+input = "dadi is here"
+normalized = "daddy is here"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "rit-in-his-home"
+input = "in his home"
+normalized = "in daddy home"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "rit-wake-up-home"
+input = "wake up daddy"
+normalized = "wakeup daddy"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "rit-woke-up-daddy"
+input = "woke up daddy"
+normalized = "wakeup daddy"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "rit-daddy-repeat"
+input = "daddy's home"
+normalized = "daddy home"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+reply_contains = "Already on it"
+handled = true
+
+[[case]]
+id = "rit-wakeup-repeat-2"
+input = "wakeup daddy"
+normalized = "wakeup daddy"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+reply_contains = "Already on it"
+handled = true
+
+[[case]]
+id = "rit-at-his-home"
+input = "at his home"
+normalized = "at daddy home"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "rit-wake-hyphen-home"
+input = "wake-up im home"
+normalized = "wakeup im home"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+handled = true
+
+[[case]]
+id = "rit-daddy-home-plain"
+input = "daddy home"
+normalized = "daddy home"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+reply_contains = "Already on it"
+handled = true
+

@@ -1,0 +1,322 @@
+[[case]]
+id = "st-cancel-0"
+input = "cancel"
+normalized = "cancel"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "st-cancel-1"
+input = "never mind"
+normalized = "never mind"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "st-cancel-2"
+input = "nevermind"
+normalized = "nevermind"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "st-cancel-3"
+input = "forget it"
+normalized = "forget it"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "st-cancel-4"
+input = "stop"
+normalized = "stop"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "st-cancel-5"
+input = "abort"
+normalized = "abort"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "st-cancel-6"
+input = "cancel please"
+normalized = "cancel please"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "st-cancel-7"
+input = "never mind that"
+normalized = "never mind that"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "st-thanks-0"
+input = "thank you"
+normalized = "thank you"
+stage = "pattern"
+intent = "Thanks"
+reply = "Anytime."
+handled = true
+
+[[case]]
+id = "st-thanks-1"
+input = "thanks"
+normalized = "thanks"
+stage = "pattern"
+intent = "Thanks"
+reply = "Anytime."
+handled = true
+
+[[case]]
+id = "st-thanks-2"
+input = "cheers"
+normalized = "cheers"
+stage = "pattern"
+intent = "Thanks"
+reply = "Anytime."
+handled = true
+
+[[case]]
+id = "st-thanks-3"
+input = "appreciate it"
+normalized = "appreciate it"
+stage = "pattern"
+intent = "Thanks"
+reply = "Anytime."
+handled = true
+
+[[case]]
+id = "st-thanks-4"
+input = "thanks a lot"
+normalized = "thanks a lot"
+stage = "pattern"
+intent = "Thanks"
+reply = "Anytime."
+handled = true
+
+[[case]]
+id = "st-thanks-5"
+input = "thank you kuro"
+normalized = "thank you kuro"
+stage = "pattern"
+intent = "Thanks"
+reply = "Anytime."
+handled = true
+
+[[case]]
+id = "st-id-0"
+input = "who are you"
+normalized = "who are you"
+stage = "pattern"
+intent = "Identity"
+reply = "Kuro. Local assistant. Phrases first, model last."
+handled = true
+
+[[case]]
+id = "st-id-1"
+input = "what are you"
+normalized = "what are you"
+stage = "pattern"
+intent = "Identity"
+reply = "Kuro. Local assistant. Phrases first, model last."
+handled = true
+
+[[case]]
+id = "st-id-2"
+input = "your name"
+normalized = "your name"
+stage = "pattern"
+intent = "Identity"
+reply = "Kuro. Local assistant. Phrases first, model last."
+handled = true
+
+[[case]]
+id = "st-id-3"
+input = "whats your name"
+normalized = "whats your name"
+stage = "pattern"
+intent = "Identity"
+reply = "Kuro. Local assistant. Phrases first, model last."
+handled = true
+
+[[case]]
+id = "st-id-4"
+input = "tell me your name"
+normalized = "tell me your name"
+stage = "pattern"
+intent = "Identity"
+reply = "Kuro. Local assistant. Phrases first, model last."
+handled = true
+
+[[case]]
+id = "st-time-0"
+input = "time"
+normalized = "time"
+stage = "pattern"
+intent = "Time"
+reply_contains = "It's"
+handled = true
+
+[[case]]
+id = "st-time-1"
+input = "the time"
+normalized = "the time"
+stage = "pattern"
+intent = "Time"
+reply_contains = "It's"
+handled = true
+
+[[case]]
+id = "st-time-2"
+input = "what time is it"
+normalized = "what time is it"
+stage = "pattern"
+intent = "Time"
+reply_contains = "It's"
+handled = true
+
+[[case]]
+id = "st-time-3"
+input = "whats the time"
+normalized = "whats the time"
+stage = "pattern"
+intent = "Time"
+reply_contains = "It's"
+handled = true
+
+[[case]]
+id = "st-time-4"
+input = "current time"
+normalized = "current time"
+stage = "pattern"
+intent = "Time"
+reply_contains = "It's"
+handled = true
+
+[[case]]
+id = "st-time-5"
+input = "tell me the time"
+normalized = "tell me the time"
+stage = "pattern"
+intent = "Time"
+reply_contains = "It's"
+handled = true
+
+[[case]]
+id = "st-date-0"
+input = "date"
+normalized = "date"
+stage = "pattern"
+intent = "Date"
+reply_contains = "Today is"
+handled = true
+
+[[case]]
+id = "st-date-1"
+input = "the date"
+normalized = "the date"
+stage = "pattern"
+intent = "Date"
+reply_contains = "Today is"
+handled = true
+
+[[case]]
+id = "st-date-2"
+input = "what day is it"
+normalized = "what day is it"
+stage = "pattern"
+intent = "Date"
+reply_contains = "Today is"
+handled = true
+
+[[case]]
+id = "st-date-3"
+input = "whats the date"
+normalized = "whats the date"
+stage = "pattern"
+intent = "Date"
+reply_contains = "Today is"
+handled = true
+
+[[case]]
+id = "st-date-4"
+input = "what date"
+normalized = "what date"
+stage = "pattern"
+intent = "Date"
+reply_contains = "Today is"
+handled = true
+
+[[case]]
+id = "st-date-5"
+input = "todays date"
+normalized = "todays date"
+stage = "pattern"
+intent = "Date"
+reply_contains = "Today is"
+handled = true
+
+[[case]]
+id = "st-date-6"
+input = "current date"
+normalized = "current date"
+stage = "pattern"
+reply_contains = "Today is"
+handled = true
+
+[[case]]
+id = "st-date-7"
+input = "what is today"
+normalized = "what is today"
+stage = "pattern"
+intent = "Date"
+reply_contains = "Today is"
+handled = true
+
+[[case]]
+id = "st-commands"
+input = "commands"
+normalized = "commands"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+handled = true
+
+[[case]]
+id = "st-your-commands"
+input = "your commands"
+normalized = "your commands"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+handled = true
+
+[[case]]
+id = "st-what-support"
+input = "what do you support"
+normalized = "what do you support"
+stage = "exact"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+handled = true
+

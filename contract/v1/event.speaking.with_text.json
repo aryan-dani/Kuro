@@ -1,0 +1,20 @@
+{
+  "kuro": "hello",
+  "label": "speaking",
+  "levels": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "paused": false,
+  "state": "speaking",
+  "you": "hi"
+}

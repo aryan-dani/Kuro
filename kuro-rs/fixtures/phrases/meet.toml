@@ -1,0 +1,123 @@
+# Cases run in file order due to cooldowns. First meet should succeed; immediate repeats may return Already on it style replies.
+[[case]]
+id = "meet-send-mom"
+input = "Make a Google Meet and send the link to Mom"
+normalized = "make a google meet and send the link to mom"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "mom" }
+reply = "Sent the Meet link to mom."
+handled = true
+
+[[case]]
+id = "meet-open-plain"
+input = "Make a Google Meet"
+normalized = "make a google meet"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "" }
+reply = "The Meet is open."
+handled = true
+
+[[case]]
+id = "meet-short"
+input = "Make a Meet and send it to Mom"
+normalized = "make a meet and send it to mom"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "mom" }
+reply = "Sent the Meet link to mom."
+handled = true
+
+[[case]]
+id = "meet-create-mom"
+input = "Create a Google Meet for Mom"
+normalized = "create a google meet for mom"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "mom" }
+reply = "Sent the Meet link to mom."
+handled = true
+
+[[case]]
+id = "meet-wa-mom"
+input = "please make a google meet and send the link to mom on whatsapp"
+normalized = "please make a google meet and send the link to mom on whatsapp"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "mom" }
+reply = "Sent the Meet link to mom."
+handled = true
+
+[[case]]
+id = "meet-start"
+input = "start a meet"
+normalized = "start a meet"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "" }
+reply = "The Meet is open."
+handled = true
+
+[[case]]
+id = "meet-mate-link"
+input = "Send the Google mate link to mob."
+normalized = "send the google mate link to mob"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "mob" }
+reply = "Sent the Meet link to mob."
+handled = true
+
+[[case]]
+id = "meet-link-mom"
+input = "Send the Google Meet link to Mom"
+normalized = "send the google meet link to mom"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "mom" }
+reply = "Sent the Meet link to mom."
+handled = true
+
+[[case]]
+id = "meet-repeat-1"
+input = "Make a Google Meet"
+normalized = "make a google meet"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "" }
+reply = "The Meet is open."
+handled = true
+
+[[case]]
+id = "meet-repeat-2"
+input = "start a meet"
+normalized = "start a meet"
+stage = "pattern"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "" }
+reply = "The Meet is open."
+handled = true
+
+[[case]]
+id = "meet-semantic"
+input = "create a google meet link please"
+normalized = "create a google meet link please"
+stage = "semantic"
+intent = "MakeMeet"
+tool = "make_meet"
+args = { contact = "" }
+reply = "The Meet is open."
+handled = true
+needs_model = true
+

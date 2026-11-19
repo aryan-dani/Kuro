@@ -1,0 +1,171 @@
+[[case]]
+id = "ro-cancel"
+input = "cancel"
+normalized = "cancel"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "ro-never-mind"
+input = "never mind"
+normalized = "never mind"
+stage = "exact"
+intent = "Cancel"
+reply = "Alright."
+handled = true
+
+[[case]]
+id = "ro-thanks"
+input = "thank you"
+normalized = "thank you"
+stage = "exact"
+intent = "Thanks"
+reply = "Anytime."
+handled = true
+
+[[case]]
+id = "ro-identity"
+input = "who are you"
+normalized = "who are you"
+stage = "exact"
+intent = "Identity"
+reply = "Kuro. Local assistant. Phrases first, model last."
+handled = true
+
+[[case]]
+id = "ro-stop-music"
+input = "stop the music"
+normalized = "stop the music"
+stage = "pattern"
+intent = "StopMusic"
+reply = "Music stopped."
+handled = true
+
+[[case]]
+id = "ro-desk-off"
+input = "desk off"
+normalized = "desk offf"
+stage = "exact"
+intent = "PowerOff"
+tool = "control_smart_plug"
+args = { scene = "power_off" }
+reply = "Desk off."
+handled = true
+
+[[case]]
+id = "ro-desk-on"
+input = "desk on"
+normalized = "desk on"
+stage = "exact"
+intent = "PowerOn"
+tool = "control_smart_plug"
+args = { scene = "power_on" }
+reply = "Desk on."
+handled = true
+
+[[case]]
+id = "ro-help"
+input = "help"
+normalized = "help"
+stage = "exact"
+intent = "Help"
+reply = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+reply_contains = "Desk, music, news"
+handled = true
+
+[[case]]
+id = "ro-pause-song"
+input = "pause the song"
+normalized = "pause the song"
+stage = "pattern"
+intent = "PauseMusic"
+reply = "Nothing is playing."
+handled = true
+
+[[case]]
+id = "ro-resume-music"
+input = "resume music"
+normalized = "resume music"
+stage = "pattern"
+intent = "ResumeMusic"
+reply = "Nothing to resume."
+handled = true
+
+[[case]]
+id = "ro-good-night"
+input = "good night"
+normalized = "goodnight"
+stage = "pattern"
+intent = "GoodNight"
+tool = "control_smart_plug"
+args = { scene = "good_night" }
+reply = "Desk off. Good night, sir."
+handled = true
+
+[[case]]
+id = "ro-news"
+input = "what's the news"
+normalized = "whats the news"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "ro-inbox"
+input = "check my inbox"
+normalized = "check my inbox"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "ro-daddy-first"
+input = "daddy's home"
+normalized = "daddy home"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+reply_contains = "Already on it"
+handled = true
+
+[[case]]
+id = "ro-wakeup-repeat"
+input = "wakeup daddy"
+normalized = "wakeup daddy"
+stage = "pattern"
+intent = "DaddyHome"
+reply = "Already on it, sir."
+reply_contains = "Already on it"
+handled = true
+
+[[case]]
+id = "ro-n8n-hint"
+input = "run n8n automation please"
+normalized = "run n8n automation please"
+stage = "pattern"
+reply = "I don't know that workflow. Check the local n8n registry."
+reply_contains = "workflow"
+handled = true
+
+[[case]]
+id = "ro-hello-no-match"
+input = "hello there"
+normalized = "hello there"
+stage = "none"
+handled = false
+
+[[case]]
+id = "ro-banana-workflow"
+input = "run banana radio"
+normalized = "run banana radio"
+stage = "none"
+handled = false
+

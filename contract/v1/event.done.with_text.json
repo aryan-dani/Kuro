@@ -1,0 +1,20 @@
+{
+  "kuro": "hello",
+  "label": "done",
+  "levels": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "paused": false,
+  "state": "done",
+  "you": "hi"
+}

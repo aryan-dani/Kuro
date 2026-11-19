@@ -1,0 +1,110 @@
+[[case]]
+id = "wf-morning-brief"
+input = "please run the morning brief"
+normalized = "please run the morning brief"
+stage = "pattern"
+tool = "run_workflow"
+args = { input = "", workflow = "morning_brief" }
+reply = "Workflow started."
+handled = true
+
+[[case]]
+id = "wf-morning-alias"
+input = "run my morning"
+normalized = "run my morning"
+stage = "pattern"
+tool = "run_workflow"
+args = { input = "", workflow = "morning_brief" }
+reply = "Workflow started."
+handled = true
+
+[[case]]
+id = "wf-start-day"
+input = "start my day"
+normalized = "start my day"
+stage = "pattern"
+tool = "run_workflow"
+args = { input = "", workflow = "morning_brief" }
+reply = "Workflow started."
+handled = true
+
+[[case]]
+id = "wf-log-idea"
+input = "log idea build the nfc reader"
+normalized = "log idea build the nfc reader"
+stage = "pattern"
+tool = "run_workflow"
+args = { input = "build the nfc reader", workflow = "log_idea" }
+reply = "Workflow started."
+handled = true
+
+[[case]]
+id = "wf-save-idea"
+input = "save idea"
+normalized = "save idea"
+stage = "pattern"
+tool = "run_workflow"
+args = { input = "", workflow = "log_idea" }
+reply = "Workflow started."
+handled = true
+
+[[case]]
+id = "wf-note-this"
+input = "note this"
+normalized = "note this"
+stage = "pattern"
+tool = "run_workflow"
+args = { input = "", workflow = "log_idea" }
+reply = "Workflow started."
+handled = true
+
+[[case]]
+id = "wf-hackathon"
+input = "hackathon prep"
+normalized = "hackathon prep"
+stage = "pattern"
+tool = "run_workflow"
+args = { input = "", workflow = "hackathon_prep" }
+reply = "Workflow started."
+handled = true
+
+[[case]]
+id = "wf-unknown"
+input = "run banana radio"
+normalized = "run banana radio"
+stage = "none"
+handled = false
+
+[[case]]
+id = "wf-n8n-hint"
+input = "run n8n automation please"
+normalized = "run n8n automation please"
+stage = "pattern"
+reply = "I don't know that workflow. Check the local n8n registry."
+reply_contains = "workflow"
+handled = true
+
+[[case]]
+id = "wf-trigger"
+input = "trigger the morning brief workflow"
+normalized = "trigger the morning brief workflow"
+stage = "pattern"
+reply = "I don't know that workflow. Check the local n8n registry."
+handled = true
+
+[[case]]
+id = "wf-launch"
+input = "launch automation for morning brief"
+normalized = "launch automation for morning brief"
+stage = "pattern"
+reply = "I don't know that workflow. Check the local n8n registry."
+handled = true
+
+[[case]]
+id = "wf-start-workflow"
+input = "start workflow log idea"
+normalized = "start workflow log idea"
+stage = "pattern"
+reply = "I don't know that workflow. Check the local n8n registry."
+handled = true
+

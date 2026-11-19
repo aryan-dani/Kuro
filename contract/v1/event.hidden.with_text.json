@@ -1,0 +1,20 @@
+{
+  "kuro": "hello",
+  "label": "hidden",
+  "levels": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "paused": false,
+  "state": "hidden",
+  "you": "hi"
+}

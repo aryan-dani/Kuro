@@ -1,0 +1,14 @@
+{
+  "body": {
+    "hud_show_text": false,
+    "llm_mode": "fallback",
+    "paused": false,
+    "plug_id_masked": "",
+    "router_mode": "semantic_onnx",
+    "stt_backend": "auto",
+    "tts_active": "kokoro",
+    "tts_engine": "auto",
+    "xtts_language": "en"
+  },
+  "status": 200
+}

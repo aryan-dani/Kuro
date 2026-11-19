@@ -1,0 +1,355 @@
+[[case]]
+id = "news-0"
+input = "what's the news"
+normalized = "whats the news"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-1"
+input = "whats the news"
+normalized = "whats the news"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-2"
+input = "what is the news"
+normalized = "what is the news"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-3"
+input = "what's the news today"
+normalized = "whats the news today"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-4"
+input = "latest news"
+normalized = "latest news"
+stage = "pattern"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-5"
+input = "headlines please"
+normalized = "headlines please"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-6"
+input = "brief me"
+normalized = "brief me"
+stage = "pattern"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-7"
+input = "any updates"
+normalized = "any updates"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-8"
+input = "give me the news"
+normalized = "give me the news"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-9"
+input = "read the news"
+normalized = "read the news"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-10"
+input = "tech news"
+normalized = "tech news"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "tech" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-11"
+input = "world news"
+normalized = "world news"
+stage = "pattern"
+intent = "GetNews"
+tool = "get_news"
+args = { topic = "world" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-12"
+input = "business news"
+normalized = "business news"
+stage = "pattern"
+tool = "get_news"
+args = { topic = "business" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-13"
+input = "ai news"
+normalized = "ai news"
+stage = "pattern"
+tool = "get_news"
+args = { topic = "ai" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-14"
+input = "sports news"
+normalized = "sports news"
+stage = "pattern"
+tool = "get_news"
+args = { topic = "sports" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "news-15"
+input = "whats happening"
+normalized = "whats happening"
+stage = "pattern"
+tool = "get_news"
+args = { topic = "general" }
+reply = "Here are the top headlines. Alpha. Next: Beta. And: Gamma."
+handled = true
+
+[[case]]
+id = "inbox-0"
+input = "check my inbox"
+normalized = "check my inbox"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-1"
+input = "check inbox"
+normalized = "check inbox"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-2"
+input = "check my email"
+normalized = "check my email"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-3"
+input = "check my mail"
+normalized = "check my mail"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-4"
+input = "check email"
+normalized = "check email"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-5"
+input = "check mail"
+normalized = "check mail"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-6"
+input = "urgent mail"
+normalized = "urgent mail"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "urgent" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-7"
+input = "urgent email"
+normalized = "urgent email"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "urgent" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-8"
+input = "any urgent mail"
+normalized = "any urgent mail"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "urgent" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-9"
+input = "important email"
+normalized = "important email"
+stage = "pattern"
+tool = "check_inbox"
+args = { mode = "urgent" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-10"
+input = "important mail"
+normalized = "important mail"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "urgent" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-11"
+input = "deadlines today"
+normalized = "deadlines today"
+stage = "pattern"
+tool = "check_inbox"
+args = { mode = "deadlines" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-12"
+input = "any deadlines"
+normalized = "any deadlines"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "deadlines" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-13"
+input = "my deadlines"
+normalized = "my deadlines"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "deadlines" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-14"
+input = "missed email"
+normalized = "missed email"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-15"
+input = "missed mail"
+normalized = "missed mail"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
+[[case]]
+id = "inbox-16"
+input = "inbox check"
+normalized = "inbox check"
+stage = "pattern"
+intent = "CheckInbox"
+tool = "check_inbox"
+args = { mode = "summary" }
+reply = "Two unread messages."
+handled = true
+
