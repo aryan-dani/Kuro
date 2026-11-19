@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 kuro-core = { path = "../kuro-core" }
+kuro-features = { path = "../kuro-features" }
 kuro-tools = { path = "../kuro-tools" }
 regex = { workspace = true }
 serde_json = { workspace = true }
@@ -16,7 +17,9 @@ ort = { workspace = true }
 
 [dev-dependencies]
 kuro-tools = { path = "../kuro-tools" }
+serde = { workspace = true }
 serde_json = { workspace = true }
+toml = { workspace = true }
 [lints]
 workspace = true
 

@@ -1,0 +1,11 @@
+---
+description: Voice features in kuro-features (one folder per feature)
+globs: kuro-rs/crates/kuro-features/**
+alwaysApply: false
+---
+Stay inside one feature folder under `src/features/<id>/` per change.
+Phrases, replies, and settings belong in `feature.toml`, not scattered in Rust.
+Use `ctx.clock`, `ctx.http`, and other ports; no statics, env reads, or raw threads.
+Register with `cargo xtask new-feature <id>` (two lines in `features/mod.rs`).
+Every error path needs a test in `tests.rs` using `FakeClock` and other fakes.
+Do not edit the engine loop, router execution, or shell for a feature-only change.

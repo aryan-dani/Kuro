@@ -1,0 +1,21 @@
+id = "calendar"
+title = "Calendar"
+tier = "read_only"
+default_enabled = false
+priority = 14
+
+[[intents]]
+id = "calendar.next"
+exact = ["next meeting", "what is next on my calendar", "next event", "what is my next event"]
+
+[[intents]]
+id = "calendar.today"
+exact = ["calendar today", "what is on my calendar today", "today's calendar", "my agenda today"]
+
+[replies]
+not_configured = "Calendar is not configured."
+next_none = "You have no upcoming events."
+next_ok = "Next up: {summary} at {time}."
+today_none = "Nothing on your calendar today."
+today_one = "You have one event today: {summary} at {time}."
+today_many = "You have {count} events today."

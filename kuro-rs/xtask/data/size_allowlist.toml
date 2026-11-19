@@ -1,0 +1,7 @@
+# Physical line counts; may only shrink unless the file grew (then fail).
+"KuroShell/KuroShell/NativeCapsule.cs" = 919
+"KuroShell/KuroShell/HudWindow.cs" = 602
+"kuro-rs/crates/kuro-tts/src/kokoro.rs" = 571
+"scripts/bench/run_stt.py" = 518
+"KuroShell/KuroShell/MainWindow.xaml.cs" = 506
+"docs/NATIVE_REWRITE_SPEC.md" = 474

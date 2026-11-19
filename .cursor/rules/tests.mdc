@@ -1,0 +1,12 @@
+---
+description: Tests, fixtures, and golden files
+globs: **/tests/**,**/tests.rs,kuro-rs/fixtures/**
+alwaysApply: false
+---
+Deterministic tests only: no sleep, no network, no env mutation, no real devices.
+Use `kuro_core::testkit` fakes when simulating time, HTTP, or config (feature testkit).
+Golden and snapshot files change only with an intentional, reviewed diff.
+Router corpus updates belong beside the failing case, not drive-by edits.
+Mark hardware-dependent tests `#[ignore]` with a reason, not silent `return`.
+Bless workflows wait until `KURO_BLESS=1` is documented in phase 11.
+Parity tests compare Rust and shell JSON; keep payloads stable across refactors.

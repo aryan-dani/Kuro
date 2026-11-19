@@ -1,0 +1,12 @@
+---
+description: Engine-shell IPC and /say HTTP surface
+globs: kuro-rs/crates/kuro-ipc/**
+alwaysApply: false
+---
+`kuro-ipc/src/lib.rs` is PROTECTED: stop without user ADR and `ADR: NNNN` trailer.
+Keep handshake and JSON shapes aligned with `contract/` snapshots and parity tests.
+Token checks use `kuro-core` token helpers; bind HTTP to 127.0.0.1 only.
+`/say` scope and auth changes need ADR 0019 cited or a new ADR.
+Contract or live daemon tests must pass after protocol edits.
+Do not move tool execution or routing into this crate.
+Prefer extending tests in `kuro-ipc/tests/` over manual shell-only verification.

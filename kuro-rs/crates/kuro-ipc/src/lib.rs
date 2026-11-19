@@ -8,8 +8,13 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use kuro_core::{EngineConfig, Timing, apply_config, mask_number};
+use kuro_protocol::{PROTOCOL_VERSION, StatusResponse};
 use kuro_tools::brain::Brain;
 use serde_json::{Value, json};
+
+pub mod handshake;
+mod pipe;
+mod say;
 
 #[derive(Clone)]
 pub struct HudSnap {
@@ -45,6 +50,8 @@ pub struct AppState {
     pub shutdown_hook: Mutex<Option<std::sync::Arc<dyn Fn() + Send + Sync>>>,
     /// Shared with the hotkey loop so Escape / `/dismiss` can cancel a live turn.
     pub clock: std::sync::Arc<Mutex<kuro_core::TurnClock>>,
+    /// Worker busy flag shared with the hotkey loop (`TurnGate`).
+    pub turn_busy: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub hud_wake: Arc<Notify>,
 }
 
@@ -67,23 +74,24 @@ pub fn event_frame(hud: &HudSnap, paused: bool, include_text: bool) -> Value {
     frame
 }
 
-fn authed(state: &AppState, headers: &HeaderMap) -> bool {
+pub(crate) fn authed(state: &AppState, headers: &HeaderMap) -> bool {
     let presented = headers.get("x-kuro-token").and_then(|v| v.to_str().ok()).unwrap_or("");
     kuro_core::token_matches(&state.token, presented)
 }
 
-fn deny() -> (StatusCode, Json<Value>) {
+pub(crate) fn deny() -> (StatusCode, Json<Value>) {
     (StatusCode::UNAUTHORIZED, Json(json!({"detail": "unauthorized"})))
 }
 
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/status", get(status))
+        .route("/handshake", post(handshake::handshake))
         .route("/config", get(get_config).put(put_config))
         .route("/workflows", get(get_workflows).put(put_workflows))
         .route("/contacts", get(get_contacts).put(put_contacts))
         .route("/timing", get(get_timing))
-        .route("/say", post(say))
+        .route("/say", post(say::say))
         .route("/thread/clear", post(clear_thread))
         .route("/dismiss", post(dismiss))
         .route("/shutdown", post(shutdown))
@@ -110,15 +118,16 @@ async fn status(State(state): State<Arc<AppState>>, headers: HeaderMap) -> impl 
     }
     let hud = state.hud.lock().unwrap_or_else(|e| e.into_inner()).clone();
     let cfg = state.config.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    Json(json!({
-        "ok": true,
-        "paused": cfg.paused,
-        "state": hud.state,
-        "api": true,
-        "logs": kuro_core::local_root().display().to_string(),
-        "router_mode": router_mode(),
-        "tts_active": kuro_tts::active_engine_name(&cfg.tts_engine),
-    }))
+    Json(StatusResponse {
+        ok: true,
+        paused: cfg.paused,
+        state: hud.state,
+        api: true,
+        logs: kuro_core::local_root().display().to_string(),
+        router_mode: router_mode().into(),
+        tts_active: kuro_tts::active_engine_name(&cfg.tts_engine).into(),
+        protocol: Some(PROTOCOL_VERSION),
+    })
     .into_response()
 }
 
@@ -297,22 +306,6 @@ async fn get_timing(State(state): State<Arc<AppState>>, headers: HeaderMap) -> i
     Json(json!({"rows": rows[start..].to_vec()})).into_response()
 }
 
-async fn say(State(state): State<Arc<AppState>>, headers: HeaderMap, body: String) -> impl IntoResponse {
-    if !authed(&state, &headers) {
-        return deny().into_response();
-    }
-    let Ok(payload) = serde_json::from_str::<Value>(&body) else {
-        return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
-    };
-    let Some(text) = payload.get("text").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()) else {
-        return (StatusCode::BAD_REQUEST, Json(json!({"ok": false}))).into_response();
-    };
-    match kuro_router::try_handle(text) {
-        Some(result) => Json(json!({"matched": true, "reply": result.reply})).into_response(),
-        None => Json(json!({"matched": false, "reply": ""})).into_response(),
-    }
-}
-
 async fn clear_thread(State(state): State<Arc<AppState>>, headers: HeaderMap) -> impl IntoResponse {
     if !authed(&state, &headers) {
         return deny().into_response();
@@ -326,6 +319,7 @@ async fn dismiss(State(state): State<Arc<AppState>>, headers: HeaderMap) -> impl
         return deny().into_response();
     }
     *state.dismiss_hits.lock().unwrap_or_else(|e| e.into_inner()) += 1;
+    state.turn_busy.store(false, std::sync::atomic::Ordering::Relaxed);
     if let Ok(mut clock) = state.clock.lock() {
         clock.force_unblock();
     }
@@ -363,6 +357,9 @@ async fn events(State(state): State<Arc<AppState>>, headers: HeaderMap, ws: WebS
         return deny().into_response();
     }
     ws.on_upgrade(move |mut socket| async move {
+        if socket.send(axum::extract::ws::Message::Text(handshake::engine_hello_json())).await.is_err() {
+            return;
+        }
         let mut previous: Option<String> = None;
         loop {
             let hud = state.hud.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -389,86 +386,10 @@ pub fn can_listen(token: &str) -> bool {
     !token.is_empty()
 }
 
-const PIPE_NAME: &str = r"\\.\pipe\KuroEngine";
-
-fn pipe_name() -> String {
-    std::env::var("KURO_PIPE_NAME").unwrap_or_else(|_| PIPE_NAME.to_string())
-}
-
-async fn serve_named_pipe(state: Arc<AppState>) {
-    use tokio::net::windows::named_pipe::ServerOptions;
-
-    let pipe = pipe_name();
-    let mut server = match ServerOptions::new().first_pipe_instance(true).create(&pipe) {
-        Ok(server) => server,
-        Err(_) => return,
-    };
-    loop {
-        if server.connect().await.is_err() {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            continue;
-        }
-        let connected = server;
-        server = match ServerOptions::new().create(&pipe) {
-            Ok(next) => next,
-            Err(_) => return,
-        };
-        let client_state = state.clone();
-        tokio::spawn(async move {
-            handle_pipe_client(client_state, connected).await;
-        });
-    }
-}
-
-async fn handle_pipe_client(state: Arc<AppState>, mut server: tokio::net::windows::named_pipe::NamedPipeServer) {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    let mut auth_buf = Vec::with_capacity(128);
-    let mut byte = [0u8; 1];
-    loop {
-        if server.read_exact(&mut byte).await.is_err() {
-            return;
-        }
-        if byte[0] == b'\n' {
-            break;
-        }
-        auth_buf.push(byte[0]);
-        if auth_buf.len() > 512 {
-            return;
-        }
-    }
-    let auth = String::from_utf8_lossy(&auth_buf);
-    let presented = auth.trim().strip_prefix("AUTH ").unwrap_or("").trim();
-    if !kuro_core::token_matches(&state.token, presented) {
-        let _ = server.write_all(b"DENY\n").await;
-        return;
-    }
-    if server.write_all(b"OK\n").await.is_err() {
-        return;
-    }
-    let mut previous: Option<String> = None;
-    loop {
-        let hud = state.hud.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        let cfg = state.config.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        let frame = event_frame(&hud, cfg.paused, cfg.hud_show_text).to_string();
-        if skip_unchanged_quiet_frame(&hud, previous.as_deref(), &frame) {
-            tokio::time::sleep(std::time::Duration::from_millis(33)).await;
-            continue;
-        }
-        let mut line = frame.clone();
-        line.push('\n');
-        if server.write_all(line.as_bytes()).await.is_err() {
-            break;
-        }
-        previous = Some(frame);
-        tokio::time::sleep(std::time::Duration::from_millis(33)).await;
-    }
-}
-
 pub async fn serve(state: Arc<AppState>, listener: tokio::net::TcpListener) {
     let pipe_state = state.clone();
     tokio::spawn(async move {
-        serve_named_pipe(pipe_state).await;
+        pipe::serve_named_pipe(pipe_state).await;
     });
     let _ = axum::serve(listener, router(state)).await;
 }

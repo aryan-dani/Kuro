@@ -1,0 +1,13 @@
+id = "time"
+title = "Time"
+tier = "read_only"
+default_enabled = true
+priority = 10
+
+[[intents]]
+id = "time.now"
+exact = ["what time is it"]
+exemplars = ["tell me the time", "current time", "time", "the time", "whats the time"]
+
+[replies]
+now_ok = "It's {time}."

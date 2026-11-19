@@ -1,0 +1,26 @@
+id = "desk"
+title = "Desk power"
+tier = "reversible"
+default_enabled = true
+priority = 20
+
+[[intents]]
+id = "desk.power_on"
+exact = ["desk on"]
+exemplars = ["turn on the desk", "power on the desk"]
+
+[[intents]]
+id = "desk.power_off"
+exact = ["desk off"]
+exemplars = ["turn off the desk", "power off the desk"]
+
+[[intents]]
+id = "desk.good_night"
+exact = ["good night"]
+exemplars = ["goodnight", "lights out"]
+
+[replies]
+power_on = "Desk on."
+power_off = "Desk off."
+good_night = "Desk off. Good night, sir."
+unreachable = "I couldn't reach the plug."

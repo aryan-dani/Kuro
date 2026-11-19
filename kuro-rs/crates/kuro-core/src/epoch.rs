@@ -5,11 +5,22 @@ pub struct TurnClock {
     pub followup: bool,
     pub cancel: bool,
     pub processing: bool,
+    /// Bumped by `cancel_speak` and dismiss so in-flight TTS can stop without killing a new turn.
+    pub speak_gen: u64,
 }
 
 impl TurnClock {
     pub fn live(&self, epoch: u64) -> bool {
         epoch == self.turn && !self.cancel
+    }
+
+    pub fn speak_live(&self, epoch: u64, speak_gen: u64) -> bool {
+        self.live(epoch) && speak_gen == self.speak_gen
+    }
+
+    /// Stop any speech tied to an older generation (barge-in `CancelSpeak`, coordinated dismiss).
+    pub fn cancel_speak(&mut self) {
+        self.speak_gen = self.speak_gen.saturating_add(1);
     }
 
     pub fn snapshot(&self) -> u64 {
@@ -22,6 +33,7 @@ impl TurnClock {
         self.followup = false;
         self.cancel = true;
         self.processing = false;
+        self.cancel_speak();
     }
 
     pub fn begin_turn(&mut self) -> u64 {

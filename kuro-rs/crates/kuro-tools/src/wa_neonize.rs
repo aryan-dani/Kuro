@@ -1,14 +1,15 @@
 //! In-process WhatsApp send via the neonize Go bridge DLL (same session as Python).
 
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
-use std::path::{Path, PathBuf};
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use libloading::Library;
+use crate::wa_ffi::{Api, ensure_dll, load_api};
 
 const LINK_SPOKEN: &str = "I opened a link code. On your phone, open WhatsApp, then Linked devices, then Link a device, and scan it. Then ask me again.";
 
@@ -17,48 +18,6 @@ const DEVICE_PROPS: &[u8] = &[
     0x0a, 0x04, 0x4b, 0x75, 0x72, 0x6f, 0x18, 0x07, 0x20, 0x00, 0x2a, 0x08, 0x08, 0x00, 0x10, 0x01, 0x18, 0x10, 0x28,
     0x00,
 ];
-
-type NeonizeFn = unsafe extern "C" fn(
-    *const c_char,
-    *const c_char,
-    *const u8,
-    c_int,
-    c_int,
-    *const c_char,
-    Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
-    Option<unsafe extern "C" fn(*mut c_void, bool)>,
-    Option<unsafe extern "C" fn(*const c_char, *mut c_void, c_int, c_int)>,
-    Option<unsafe extern "C" fn(*mut c_void, c_int)>,
-    *const u8,
-    c_int,
-    *const u8,
-    c_int,
-    *const u8,
-    c_int,
-    *mut c_void,
-) -> *mut c_void;
-
-type SendMessageFn = unsafe extern "C" fn(*const c_char, *const u8, c_int, *const u8, c_int) -> *mut GoBytes;
-type IsConnectedFn = unsafe extern "C" fn(*const c_char) -> bool;
-type IsLoggedInFn = unsafe extern "C" fn(*const c_char) -> bool;
-type StopFn = unsafe extern "C" fn(*const c_char);
-type FreeBytesFn = unsafe extern "C" fn(*mut GoBytes);
-
-#[repr(C)]
-struct GoBytes {
-    ptr: *mut u8,
-    size: usize,
-}
-
-struct Api {
-    _lib: Library,
-    neonize: NeonizeFn,
-    send_message: SendMessageFn,
-    is_connected: IsConnectedFn,
-    is_logged_in: IsLoggedInFn,
-    stop: StopFn,
-    free_bytes: FreeBytesFn,
-}
 
 enum Cmd {
     Send { digits: String, text: String, reply: Sender<Result<(), String>> },
@@ -87,72 +46,6 @@ fn state() -> Arc<State> {
             st
         })
         .clone()
-}
-
-fn dll_candidates() -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    if let Ok(path) = std::env::var("KURO_NEONIZE_DLL") {
-        out.push(PathBuf::from(path));
-    }
-    let local = kuro_core::KuroPaths::from_env().root.join("native").join("neonize-windows-amd64.dll");
-    out.push(local);
-    if let Ok(root) = std::env::var("KURO_ROOT") {
-        out.push(
-            PathBuf::from(root)
-                .join(".venv")
-                .join("Lib")
-                .join("site-packages")
-                .join("neonize")
-                .join("neonize-windows-amd64.dll"),
-        );
-    }
-    out.push(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("..")
-            .join("..")
-            .join(".venv")
-            .join("Lib")
-            .join("site-packages")
-            .join("neonize")
-            .join("neonize-windows-amd64.dll"),
-    );
-    out
-}
-
-fn ensure_dll() -> Result<PathBuf, String> {
-    let candidates = dll_candidates();
-    if let Some(found) = candidates.into_iter().find(|p| p.is_file()) {
-        let dest = kuro_core::KuroPaths::from_env().root.join("native").join("neonize-windows-amd64.dll");
-        if found != dest {
-            if let Some(parent) = dest.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let _ = std::fs::copy(&found, &dest);
-            if dest.is_file() {
-                return Ok(dest);
-            }
-        }
-        return Ok(found);
-    }
-    Err("I couldn't send that WhatsApp.".into())
-}
-
-fn load_api(path: &Path) -> Result<Api, String> {
-    unsafe {
-        let lib = Library::new(path).map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-        let neonize = *lib.get::<NeonizeFn>(b"Neonize\0").map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-        let send_message =
-            *lib.get::<SendMessageFn>(b"SendMessage\0").map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-        let is_connected =
-            *lib.get::<IsConnectedFn>(b"IsConnected\0").map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-        let is_logged_in =
-            *lib.get::<IsLoggedInFn>(b"IsLoggedIn\0").map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-        let stop = *lib.get::<StopFn>(b"Stop\0").map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-        let free_bytes =
-            *lib.get::<FreeBytesFn>(b"FreeBytesStruct\0").map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-        Ok(Api { _lib: lib, neonize, send_message, is_connected, is_logged_in, stop, free_bytes })
-    }
 }
 
 fn session_path() -> PathBuf {
@@ -220,6 +113,10 @@ static QR_FLAG: AtomicBool = AtomicBool::new(false);
 static READY_FLAG: AtomicBool = AtomicBool::new(false);
 
 unsafe extern "C" fn on_qr(_uuid: *mut c_void, qr_ptr: *mut c_void) {
+    let _ = catch_unwind(AssertUnwindSafe(|| unsafe { on_qr_inner(qr_ptr) }));
+}
+
+unsafe fn on_qr_inner(qr_ptr: *mut c_void) {
     if qr_ptr.is_null() {
         return;
     }
@@ -230,9 +127,15 @@ unsafe extern "C" fn on_qr(_uuid: *mut c_void, qr_ptr: *mut c_void) {
     }
 }
 
-unsafe extern "C" fn on_login(_uuid: *mut c_void, _ok: bool) {}
+unsafe extern "C" fn on_login(_uuid: *mut c_void, _ok: bool) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {}));
+}
 
 unsafe extern "C" fn on_event(_name: *const c_char, _data: *mut c_void, _len: c_int, ev: c_int) {
+    let _ = catch_unwind(AssertUnwindSafe(|| on_event_inner(ev)));
+}
+
+fn on_event_inner(ev: c_int) {
     // 3 = connected (matches tools/wa_link.py list_func index)
     if ev == 3 {
         READY_FLAG.store(true, Ordering::SeqCst);
@@ -243,7 +146,9 @@ unsafe extern "C" fn on_event(_name: *const c_char, _data: *mut c_void, _len: c_
     }
 }
 
-unsafe extern "C" fn on_log(_data: *mut c_void, _len: c_int) {}
+unsafe extern "C" fn on_log(_data: *mut c_void, _len: c_int) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {}));
+}
 
 fn worker_main(st: Arc<State>, rx: Receiver<Cmd>) {
     let Ok(dll) = ensure_dll() else {

@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose a voice feature or adapter
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: intent
+    attributes:
+      label: Intents and example phrases
+      description: What the user says and what Kuro should do
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Permission tier
+      options:
+        - read_only
+        - reversible
+        - external_send
+        - irreversible
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Config, failures, and tests
+    validations:
+      required: false

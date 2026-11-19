@@ -38,6 +38,7 @@ fn state(dir: &std::path::Path) -> Arc<AppState> {
         shutdown_hits: Mutex::new(0),
         shutdown_hook: Mutex::new(None),
         clock: Arc::new(Mutex::new(kuro_core::TurnClock::default())),
+        turn_busy: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         hud_wake: Arc::new(Notify::new()),
     })
 }
@@ -75,11 +76,14 @@ async fn live_daemon_http_pipe_and_auth() {
     assert!(matches!(cfg_json["router_mode"].as_str(), Some("semantic_onnx" | "legacy")));
     assert!(matches!(cfg_json["tts_active"].as_str(), Some("kokoro" | "piper" | "sapi")));
 
+    unsafe {
+        std::env::set_var("KURO_SAY_EXECUTE", "1");
+    }
     let say = client
         .post(format!("{base}/say"))
         .header("x-kuro-token", "gate-test-token")
         .header("content-type", "application/json")
-        .body(r#"{"text":"who are you"}"#.to_string())
+        .body(r#"{"text":"who are you","mode":"execute"}"#.to_string())
         .send()
         .await
         .unwrap();
@@ -105,6 +109,14 @@ async fn live_daemon_http_pipe_and_auth() {
         .expect("auth line")
         .expect("auth payload");
     assert_eq!(auth, "OK");
+    let hello_line = timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .expect("hello timeout")
+        .expect("hello line")
+        .expect("hello payload");
+    let hello: kuro_protocol::HandshakeRequest = serde_json::from_str(&hello_line).unwrap();
+    assert_eq!(hello.protocol, kuro_protocol::PROTOCOL_VERSION);
+    assert!(!hello.engine.is_empty());
     let frame_line = timeout(Duration::from_secs(2), lines.next_line())
         .await
         .expect("frame timeout")

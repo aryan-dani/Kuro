@@ -17,7 +17,7 @@ fn dismiss_increments_epoch_and_blocks_stale_follow_up() {
     let fresh = clock.lock().unwrap().begin_turn();
     assert!(clock.lock().unwrap().live(fresh));
     let mut turn = voice_turn(Timing::new(dir.join("timing.csv"), false));
-    turn.hotkey_down();
+    turn.hotkey_down(&clock);
     let spoken = turn.run("who are you", "who are you", true, true, fresh, &clock, "off", false, |_| {});
     assert_eq!(spoken, "Kuro. Local assistant. Phrases first, model last.");
     let _ = std::fs::remove_dir_all(&dir);

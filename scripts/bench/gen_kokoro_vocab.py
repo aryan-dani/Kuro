@@ -6,7 +6,7 @@ src = root / "bench" / "models" / "kokoro" / "tokenizer.json"
 out = root / "kuro-rs" / "crates" / "kuro-tts" / "src" / "kokoro_vocab.rs"
 vocab = json.loads(src.read_text(encoding="utf-8"))["model"]["vocab"]
 lines = [
-    "// Auto-generated from bench/models/kokoro/tokenizer.json — do not edit by hand.",
+    "// Auto-generated from bench/models/kokoro/tokenizer.json - do not edit by hand.",
     "pub fn kokoro_char_id(ch: char) -> Option<i64> {",
     "    match ch {",
 ]

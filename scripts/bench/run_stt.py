@@ -455,7 +455,7 @@ def main() -> int:
     # connected so we can finish latency/accuracy without unplugging.
     on_ac = bool(meta["power"].get("is_charging") or meta["power"].get("ac_line_status") == 1)
     if on_ac:
-        print("AC connected — skipping idle/busy discharge sampling (keep charger plugged).")
+        print("AC connected - skipping idle/busy discharge sampling (keep charger plugged).")
         idle_mw, idle_note = None, "skipped: AC connected (DischargeRate unavailable)"
     else:
         print("Sampling idle discharge 60s...")

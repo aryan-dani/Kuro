@@ -1,0 +1,37 @@
+# Tracked example profile. Copy ideas to a gitignored local profile; never commit secrets.
+
+llm_mode = "fallback"
+stt_backend = "auto"
+tts_engine = "auto"
+api_port = 8765
+say_execute = false
+
+[hub]
+enabled = false
+
+[n8n]
+enabled = false
+
+# Legacy engine tool gates. kuro-features meet/whatsapp manifests use default_enabled = true.
+[meet]
+enabled = false
+
+[whatsapp]
+enabled = false
+
+[wake_word]
+enabled = false
+
+# Continuous listen-after-speak loop (phase 20). Engine wiring lands later; default off.
+[listener]
+enabled = false
+
+# Morning brief (26C). Off until weather or calendar is configured.
+[morning_brief]
+enabled = false
+
+[weather]
+enabled = false
+
+[calendar]
+enabled = false

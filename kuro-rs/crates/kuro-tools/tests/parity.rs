@@ -105,7 +105,7 @@ fn wf(mode: &str) -> Workflow {
 
 #[test]
 fn http_cases() {
-    n8n::set_config(Some("http://100.78.60.50:5678/webhook".into()), Some("test-token".into()));
+    n8n::set_config(Some("http://127.0.0.1:5678/webhook".into()), Some("test-token".into()));
     let sync = wf("sync");
     assert!(
         n8n::dispatch(&sync, "", Some(&|_url, _t| Ok((200, "{\"reply\":\"Hello from n8n\"}".into()))))
@@ -342,7 +342,7 @@ fn hub_dedup_and_ack() {
     assert_eq!(kuro_tools::hub::TOOLS_TIMEOUT.as_secs(), 5);
     assert_eq!(kuro_tools::hub::EXEC_TIMEOUT.as_secs(), 30);
     assert_eq!(kuro_tools::hub::HEALTH_TIMEOUT.as_secs(), 3);
-    assert_eq!(kuro_tools::hub::ws_url("http://100.78.60.50:18200"), "ws://100.78.60.50:18200/v1/events");
+    assert_eq!(kuro_tools::hub::ws_url("http://127.0.0.1:18200"), "ws://127.0.0.1:18200/v1/events");
 }
 
 #[test]

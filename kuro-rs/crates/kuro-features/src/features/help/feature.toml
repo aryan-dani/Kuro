@@ -1,0 +1,21 @@
+id = "help"
+title = "Help"
+tier = "read_only"
+default_enabled = true
+priority = 8
+
+[[intents]]
+id = "help.commands"
+exact = ["help", "commands", "help me", "what can you do", "your commands", "what do you support"]
+exemplars = ["list commands", "capabilities", "can you help", "can you help me"]
+
+[[intents]]
+id = "help.what_can_i_say"
+exact = ["what can I say", "what can i say", "list features", "show commands"]
+exemplars = ["what phrases work", "discover commands", "what do you know"]
+
+[replies]
+ok = "Desk, music, news, inbox, Meet, WhatsApp, and named workflows. Say run hello workflow to test n8n."
+discover_header = "Here is what you can say."
+discover_empty = "No features are registered yet."
+discover_line = "{title}: say phrases routed to {id}."

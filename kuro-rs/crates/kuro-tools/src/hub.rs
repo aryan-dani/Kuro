@@ -19,7 +19,7 @@ pub struct HubConfig {
 
 impl HubConfig {
     pub fn from_env() -> Option<Self> {
-        let base = std::env::var("KURO_HUB_URL").unwrap_or_else(|_| "http://100.78.60.50:18200".into());
+        let base = std::env::var("KURO_HUB_URL").unwrap_or_default();
         let token = std::env::var("KURO_HUB_TOKEN").unwrap_or_default();
         if base.trim().is_empty() || token.trim().is_empty() {
             return None;

@@ -84,25 +84,25 @@ fn send_switch(ip: &str, device_id: &str, local_key: &str, version: f64, on: boo
 
 fn send_switch_34(ip: &str, device_id: &str, local_key: &str, on: bool) -> Result<(), ()> {
     let key = crate::tuya::key16(local_key).ok_or(())?;
-    let mut local_nonce = [0u8; 16];
-    for (i, b) in local_nonce.iter_mut().enumerate() {
-        *b = (i as u8).wrapping_add(1);
-    }
+    let local_nonce = crate::tuya::random_session_nonce();
     let addr = format!("{ip}:6668").parse().map_err(|_| ())?;
     let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).map_err(|_| ())?;
     stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
     stream.set_write_timeout(Some(Duration::from_secs(2))).ok();
 
-    let start = crate::tuya::negotiate_start_34(1, &local_nonce);
+    let mut seq: u32 = 1;
+    let start = crate::tuya::negotiate_start_34(seq, &local_nonce);
     stream.write_all(&start).map_err(|_| ())?;
     let remote = read_sess_key(&mut stream)?;
-    let finish = crate::tuya::negotiate_finish_34(3, &key, &local_nonce, &remote);
+    seq += 1;
+    let finish = crate::tuya::negotiate_finish_34(seq, &key, &local_nonce, &remote);
     stream.write_all(&finish).map_err(|_| ())?;
     let _ = read_some(&mut stream);
 
     let session = crate::tuya::session_key_34(&key, &remote);
     let json = crate::tuya::control_json(device_id, on);
-    let frame = crate::tuya::pack_55aa(5, crate::tuya::CMD_CONTROL, &crate::tuya::payload_34(&session, &json));
+    seq += 1;
+    let frame = crate::tuya::pack_55aa(seq, crate::tuya::CMD_CONTROL, &crate::tuya::payload_34(&session, &json));
     stream.write_all(&frame).map_err(|_| ())?;
     let _ = read_some(&mut stream);
     Ok(())

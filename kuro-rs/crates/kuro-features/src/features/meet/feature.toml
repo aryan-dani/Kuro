@@ -1,0 +1,19 @@
+# Optional external tool: Google OAuth and Meet API actuation stay in kuro-tools.
+id = "meet"
+title = "Google Meet"
+tier = "reversible"
+default_enabled = true
+priority = 25
+
+[[intents]]
+id = "meet.create"
+exemplars = ["make a google meet", "create a google meet", "start a meet"]
+
+[replies]
+open = "The Meet is open."
+sent = "Sent the Meet link to {contact}."
+unknown_contact = "I don't know that contact."
+not_signed_in = "Google Meet is not signed in."
+busy = "I'm already opening a Meet."
+create_failed = "I couldn't create that Google Meet."
+send_failed = "I couldn't send that Meet link."

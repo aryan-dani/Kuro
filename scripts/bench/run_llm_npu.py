@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 3 gap: small LLM on NPU — compile time, tokens/sec, intent accuracy.
+"""Phase 3 gap: small LLM on NPU - compile time, tokens/sec, intent accuracy.
 
 Tries OpenVINO GenAI LLMPipeline with a tiny instruct model if exportable.
 Writes bench/llm_npu_results.json. Exits non-zero if model unavailable.

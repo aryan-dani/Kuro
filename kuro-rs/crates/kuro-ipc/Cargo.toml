@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 kuro-core = { path = "../kuro-core" }
+kuro-protocol = { path = "../kuro-protocol" }
 kuro-router = { path = "../kuro-router" }
 kuro-tools = { path = "../kuro-tools" }
 kuro-tts = { path = "../kuro-tts" }

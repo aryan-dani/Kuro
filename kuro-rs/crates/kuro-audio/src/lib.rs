@@ -17,7 +17,9 @@ pub struct FollowUpListen {
 
 impl Default for FollowUpListen {
     fn default() -> Self {
-        Self { max_ms: 7_000, silence_ms: 700, elapsed_ms: 0, heard_speech: false, quiet_ms: 0 }
+        // Long trailing silence so users can pause between words ("okay... open chrome")
+        // without the follow-up mic slamming shut.
+        Self { max_ms: 12_000, silence_ms: 1_600, elapsed_ms: 0, heard_speech: false, quiet_ms: 0 }
     }
 }
 
@@ -85,7 +87,7 @@ pub fn to_16k_mono(interleaved: &[f32], channels: usize, sample_rate: u32) -> Ve
 }
 
 /// Eleven bar heights in `0.0..=1.0` for the `/events` frame.
-/// Quiet laptop mics often sit around rms 0.002–0.01; gain keeps the HUD alive.
+/// Quiet laptop mics often sit around rms 0.002-0.01; gain keeps the HUD alive.
 pub fn levels_11(samples: &[f32]) -> [f32; 11] {
     let mut bars = [0.0f32; 11];
     if samples.is_empty() {
@@ -267,9 +269,19 @@ pub fn start_ptt_capture(producer: rtrb::Producer<f32>) -> Result<(CaptureSessio
     let sample_rate = supported.sample_rate().0;
     let channels = usize::from(supported.channels().max(1));
     let format = supported.sample_format();
-    eprintln!("Kuro microphone: {device_name} format={format:?} rate={sample_rate} ch={channels}");
+    {
+        let paths = kuro_core::KuroPaths::from_env();
+        kuro_core::append_rotating_log(
+            &paths.log(),
+            &format!("Kuro microphone: {device_name} format={format:?} rate={sample_rate} ch={channels}"),
+            1_000_000,
+        );
+    }
     let config: cpal::StreamConfig = supported.into();
-    let err_fn = |err| eprintln!("Kuro microphone stream error: {err}");
+    let err_fn = |err| {
+        let paths = kuro_core::KuroPaths::from_env();
+        kuro_core::append_rotating_log(&paths.log(), &format!("Kuro microphone stream error: {err}"), 1_000_000);
+    };
 
     let stream = match format {
         cpal::SampleFormat::F32 => device.build_input_stream(
@@ -313,4 +325,21 @@ pub fn start_ptt_capture(producer: rtrb::Producer<f32>) -> Result<(CaptureSessio
 
     stream.play().map_err(|err| format!("Could not start the microphone: {err}"))?;
     Ok((CaptureSession { _stream: stream }, device_name))
+}
+
+#[cfg(test)]
+mod log {
+    #[test]
+    fn audio_error_is_logged() {
+        let dir = std::env::temp_dir().join(format!("kuro-audio-log-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        unsafe {
+            std::env::set_var("KURO_ROOT", dir.to_string_lossy().as_ref());
+        }
+        let paths = kuro_core::KuroPaths::from_env();
+        kuro_core::append_rotating_log(&paths.log(), "Kuro microphone stream error: unit-test", 1_000_000);
+        let text = std::fs::read_to_string(paths.log()).expect("log file");
+        assert!(text.contains("stream error"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -1,0 +1,12 @@
+id = "identity"
+title = "Identity"
+tier = "read_only"
+default_enabled = true
+priority = 8
+
+[[intents]]
+id = "identity.who"
+exemplars = ["who are you", "what are you", "your name", "whats your name", "tell me your name"]
+
+[replies]
+ok = "Kuro. Local assistant. Phrases first, model last."

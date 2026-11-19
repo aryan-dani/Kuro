@@ -10,7 +10,7 @@ public static class DesignTokens
     public const string FaceSemi = "Assets/Fonts/SpaceGrotesk-Bold.ttf#Space Grotesk";
     public const string FaceMono = "Assets/Fonts/JetBrainsMono-Regular.ttf#JetBrains Mono";
 
-    // Transcript card under the capsule — Poppins only, black like the pill.
+    // Transcript card under the capsule: Poppins only, black like the pill.
     public const string ChatFace = "Assets/Fonts/Poppins-Regular.ttf#Poppins";
     public const string ChatFaceSemi = "Assets/Fonts/Poppins-SemiBold.ttf#Poppins";
     public static double ChatRadius { get; } = 22;

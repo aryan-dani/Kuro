@@ -99,6 +99,16 @@ fn rotating_log_and_heartbeat() {
 }
 
 #[test]
+fn cancel_speak_invalidates_generation() {
+    let mut clock = kuro_core::TurnClock::default();
+    let epoch = clock.begin_turn();
+    let before = clock.speak_gen;
+    clock.cancel_speak();
+    assert!(!clock.speak_live(epoch, before));
+    assert!(clock.speak_live(epoch, clock.speak_gen));
+}
+
+#[test]
 fn epoch_dismiss_invalidates_follow_up() {
     let mut clock = kuro_core::TurnClock::default();
     let epoch = clock.begin_turn();

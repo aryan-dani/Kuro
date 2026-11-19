@@ -1,0 +1,13 @@
+---
+description: Voice tools crate (becomes kuro-features in phase 09)
+globs: kuro-rs/crates/kuro-tools/**
+alwaysApply: false
+---
+Stay inside one tool module under `kuro-tools/src/` per change.
+Register tools only through `default_registry` patterns in `lib.rs`.
+Match phrases belong in router fixtures, not duplicated inside tool code.
+Wrap tool execution with the existing panic containment pattern; do not bypass it.
+Behavior changes need tests under `kuro-tools/tests/` or inline `#[cfg(test)]`.
+Do not add engine loop, IPC protocol, or hotkey logic here.
+Prefer typed errors and speakable user strings over panics on external input.
+Rename this rule file to `features.mdc` when `kuro-features` lands (phase 09).

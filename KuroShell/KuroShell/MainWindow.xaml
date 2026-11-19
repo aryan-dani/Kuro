@@ -111,6 +111,24 @@
                             <TextBlock Text="System" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
+                    <Button x:Name="NavHealth" Tag="Health" Style="{StaticResource NavButton}" Click="OnNav">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE95E;" FontSize="16" />
+                            <TextBlock Text="Health" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavPhrases" Tag="Phrases" Style="{StaticResource NavButton}" Click="OnNav">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE8F1;" FontSize="16" />
+                            <TextBlock Text="Phrases" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavSettings" Tag="Settings" Style="{StaticResource NavButton}" Click="OnNav">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE115;" FontSize="16" />
+                            <TextBlock Text="Settings" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Border>
             <Grid Grid.Column="1">
@@ -220,6 +238,7 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
+                <ContentControl x:Name="RegistryHost" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
             </Grid>
         </Grid>
     </Grid>

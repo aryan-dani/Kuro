@@ -225,10 +225,13 @@ fn espeak_ipa(text: &str) -> Option<String> {
             && chars[idx - 1].is_ascii_digit()
             && chars[idx + 1].is_ascii_digit();
 
-        if !is_decimal && matches!(ch, ',' | '.' | '?' | '!' | ';' | ':' | '—' | '…') {
+        if !is_decimal && matches!(ch, ',' | '.' | '?' | '!' | ';' | ':' | '\u{2014}' | '…') {
             let punct = ch;
             while idx + 1 < chars.len()
-                && matches!(chars[idx + 1], ',' | '.' | '?' | '!' | ';' | ':' | '—' | '…' | '"' | '\'' | '”' | ')')
+                && matches!(
+                    chars[idx + 1],
+                    ',' | '.' | '?' | '!' | ';' | ':' | '\u{2014}' | '…' | '"' | '\'' | '”' | ')'
+                )
             {
                 idx += 1;
             }
@@ -505,7 +508,7 @@ mod tests {
     fn espeak_preserves_comma_pause_before_next_word() {
         // This asserts espeak-ng IPA reconstruction (comma glued to prior word + space).
         // Without espeak, simple_g2p keeps the letters of "time," so the token before
-        // comma is 'e' — skip rather than fail headless CI runners.
+        // comma is 'e'; skip rather than fail headless CI runners.
         if detect_espeak().is_none() {
             eprintln!("espeak-ng absent; skip");
             return;

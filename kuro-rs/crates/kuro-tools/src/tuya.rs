@@ -201,11 +201,33 @@ pub fn control_json(device_id: &str, on: bool) -> Vec<u8> {
     .into_bytes()
 }
 
+fn legacy_nonce_mode() -> bool {
+    std::env::var("KURO_TUYA_LEGACY_NONCE").ok().as_deref() == Some("1")
+}
+
+pub fn random_session_nonce() -> [u8; 16] {
+    if legacy_nonce_mode() {
+        return std::array::from_fn(|i| i as u8 + 1);
+    }
+    let mut nonce = [0u8; 16];
+    getrandom::getrandom(&mut nonce).expect("session nonce");
+    nonce
+}
+
+fn random_gcm_nonce() -> [u8; 12] {
+    if legacy_nonce_mode() {
+        return [1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    }
+    let mut nonce = [0u8; 12];
+    getrandom::getrandom(&mut nonce).expect("gcm nonce");
+    nonce
+}
+
 pub fn control_frame(version: f64, seq: u32, local_key: &str, device_id: &str, on: bool) -> Option<Vec<u8>> {
     let key = key16(local_key)?;
     let json = control_json(device_id, on);
     if version >= 3.5 {
-        let nonce = [1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let nonce = random_gcm_nonce();
         Some(pack_35(seq, CMD_CONTROL, &key, &nonce, &json))
     } else if version >= 3.4 {
         Some(pack_55aa(seq, CMD_CONTROL, &payload_34(&key, &json)))

@@ -1,4 +1,4 @@
-// Auto-generated from bench/models/kokoro/tokenizer.json — do not edit by hand.
+// Auto-generated from bench/models/kokoro/tokenizer.json; do not edit by hand.
 pub fn kokoro_char_id(ch: char) -> Option<i64> {
     match ch {
         '$' => Some(0),
@@ -8,7 +8,7 @@ pub fn kokoro_char_id(ch: char) -> Option<i64> {
         '.' => Some(4),
         '!' => Some(5),
         '?' => Some(6),
-        '—' => Some(9),
+        '\u{2014}' => Some(9),
         '…' => Some(10),
         '"' => Some(11),
         '(' => Some(12),

@@ -1,0 +1,15 @@
+---
+description: Core repo rules for every agent turn
+globs:
+alwaysApply: true
+---
+Read `AGENTS.md` and `docs/plans/README.md` before editing.
+Run `cargo xtask gate fast` before finishing a change.
+No emoji, no em dashes, no en dashes in tracked text.
+No personal data (names, IPs, hostnames, user paths) in the repo.
+Generated files are read-only until `cargo xtask gen` exists (phase 11).
+If the task text and the code disagree, the code wins: stop and report.
+PROTECTED edits need user-provided ADR number and trailer `ADR: NNNN`.
+Never kill or restart a running Kuro from a script or test.
+One phase file or one scoped task per PR.
+Soft target 200 lines per file, cap 400 unless allowlisted.

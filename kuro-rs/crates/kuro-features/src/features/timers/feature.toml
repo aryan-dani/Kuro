@@ -1,0 +1,31 @@
+id = "timers"
+title = "Timers and reminders"
+tier = "reversible"
+default_enabled = true
+priority = 50
+
+[[intents]]
+id = "timers.set"
+exact = ["set a timer", "start a timer"]
+exemplars = ["set a timer for ten minutes", "start a five minute timer"]
+slots = ["duration"]
+
+[[intents]]
+id = "timers.cancel"
+exact = ["cancel the timer", "cancel my timer", "stop the timer"]
+slots = ["label"]
+
+[[intents]]
+id = "timers.list"
+exact = ["list timers", "what timers are running", "show my timers"]
+
+[replies]
+set_ok = "Timer set for {duration}."
+ask_duration = "For how long should I set the timer?"
+limit_reached = "You already have the maximum number of timers running."
+cancel_ok = "Timer canceled."
+cancel_none = "No timers are running."
+list_empty = "No timers are running."
+list_one = "One timer is running."
+list_many = "{count} timers are running."
+timer_done = "Your timer is done."

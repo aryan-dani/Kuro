@@ -8,11 +8,15 @@ pub mod brain;
 pub mod feeds;
 pub mod hub;
 pub mod meet;
+mod meet_busy;
+mod meet_http;
 pub mod music;
+pub mod music_player;
 pub mod n8n;
 pub mod plug;
 pub mod screen;
 pub mod tuya;
+mod wa_ffi;
 pub mod wa_neonize;
 pub mod whatsapp;
 
@@ -43,6 +47,11 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
+    #[doc(hidden)]
+    pub fn single(tool: KuroTool) -> Self {
+        Self { tools: vec![Arc::new(tool)] }
+    }
+
     pub fn default_registry() -> Self {
         Self {
             tools: vec![

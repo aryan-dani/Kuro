@@ -1,0 +1,30 @@
+# Downloaded models. Fill url and sha256 when fetch is wired (phase 08 doctor).
+# SPDX identifiers must match upstream before publish.
+
+[[model]]
+id = "whisper-ggml"
+used_by = ["kuro-stt"]
+license = "MIT"
+url = ""
+sha256 = ""
+
+[[model]]
+id = "kokoro-82m-onnx"
+used_by = ["kuro-tts"]
+license = "Apache-2.0"
+url = ""
+sha256 = ""
+
+[[model]]
+id = "bge-small-en-v1.5"
+used_by = ["kuro-router"]
+license = "MIT"
+url = ""
+sha256 = ""
+
+[[model]]
+id = "silero-vad"
+used_by = ["kuro-audio"]
+license = "MIT"
+url = ""
+sha256 = ""

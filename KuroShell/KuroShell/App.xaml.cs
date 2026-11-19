@@ -24,10 +24,11 @@ public partial class App : Application, IDisposable
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         Supervisor.StartOrAttach();
-        _client = new EngineClient(Supervisor.Token);
+        _client = new EngineClient(Supervisor.Token, tokenPath: EngineSupervisor.TokenFilePath());
         Hud = new HudWindow();
         Hud.ShowIdleDot = true;
         Hud.ShowState("idle");
+        _ = HandshakeOnce();
         Hud.DismissRequested = () =>
         {
             if (_client is not null)
@@ -102,6 +103,27 @@ public partial class App : Application, IDisposable
 
         var json = paused ? "{\"paused\":true}" : "{\"paused\":false}";
         await _client.SendAsync(HttpMethod.Put, "/config", json);
+    }
+
+    private async Task HandshakeOnce()
+    {
+        if (_client is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var accepted = await _client.HandshakeAsync();
+            if (accepted == false)
+            {
+                Hud?.ShowState("error", "Engine and shell protocol versions differ.");
+            }
+        }
+        catch (Exception)
+        {
+            // Older engine without /handshake, or API temporarily down; attach still works.
+        }
     }
 
     private async Task Listen(CancellationToken cancel)

@@ -66,7 +66,7 @@ def _piper_first_audio() -> dict:
 
 def _xtts_first_audio() -> dict:
     # Use production tts path but capture synthesis wall time to first writable buffer.
-    # XTTS in this repo synthesizes full utterance then plays — first-audio ~= full synth.
+    # XTTS in this repo synthesizes full utterance then plays - first-audio ~= full synth.
     try:
         import torch
         from TTS.api import TTS

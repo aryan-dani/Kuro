@@ -30,6 +30,9 @@ public sealed partial class MainWindow : Window
             NavDevices,
             NavContacts,
             NavSystem,
+            NavHealth,
+            NavPhrases,
+            NavSettings,
         ];
         ConversationLog.EnsureLoaded();
         RenderThread();
@@ -39,43 +42,6 @@ public sealed partial class MainWindow : Window
         BuildPlayground();
         Select("Conversation");
         _loading = false;
-    }
-
-    public async Task ShowPage(string page)
-    {
-        page = page switch
-        {
-            "General" or "Logs" or "Performance" or "Workflows" or "HUD" => page == "General" ? "Conversation" : "System",
-            _ => page,
-        };
-        if (page is not ("Conversation" or "Voice" or "Devices" or "Contacts" or "System"))
-        {
-            page = "Conversation";
-        }
-
-        ConversationPage.Visibility = page == "Conversation" ? Visibility.Visible : Visibility.Collapsed;
-        VoicePage.Visibility = page == "Voice" ? Visibility.Visible : Visibility.Collapsed;
-        DevicesPage.Visibility = page == "Devices" ? Visibility.Visible : Visibility.Collapsed;
-        ContactsPage.Visibility = page == "Contacts" ? Visibility.Visible : Visibility.Collapsed;
-        SystemPage.Visibility = page == "System" ? Visibility.Visible : Visibility.Collapsed;
-        Select(page);
-        try
-        {
-            await Fill(page);
-            SetStatus("");
-        }
-        catch (Exception)
-        {
-            SetStatus("The engine API is not answering.");
-        }
-    }
-
-    private void OnNav(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button && button.Tag is string page)
-        {
-            _ = ShowPage(page);
-        }
     }
 
     private async void OnNewConversation(object sender, RoutedEventArgs e)
@@ -146,25 +112,6 @@ public sealed partial class MainWindow : Window
     {
         SetStatus("Restarting.");
         Task.Run(App.Supervisor.Restart);
-    }
-
-    private async Task Fill(string page)
-    {
-        switch (page)
-        {
-            case "Voice":
-                await ShowVoice();
-                break;
-            case "Devices":
-                await ShowDevices();
-                break;
-            case "Contacts":
-                await ShowContacts();
-                break;
-            case "System":
-                await ShowSystem();
-                break;
-        }
     }
 
     private async Task ShowVoice()

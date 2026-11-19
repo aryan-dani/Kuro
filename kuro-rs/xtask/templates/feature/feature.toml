@@ -1,0 +1,13 @@
+id = "{{id}}"
+title = "{{title}}"
+tier = "read_only"
+default_enabled = false
+priority = 100
+
+[[intents]]
+id = "{{id}}.placeholder"
+exact = ["{{id}} placeholder"]
+exemplars = ["run {{id}} placeholder"]
+
+[replies]
+ok = "Done."

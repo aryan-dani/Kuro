@@ -53,3 +53,50 @@ jobs:
         env:
           KURO_GATE_CI: "1"
         run: .\scripts\Test-KuroGate.ps1
+
+  portable:
+    runs-on: ubuntu-latest
+    env:
+      CFLAGS: "-O2"
+      CXXFLAGS: "-O2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: kuro-rs
+
+      - name: xtask text and size
+        working-directory: kuro-rs
+        run: |
+          cargo xtask check size
+          cargo xtask check text
+
+      - name: Portable crate tests
+        working-directory: kuro-rs
+        run: |
+          while IFS= read -r crate; do
+            [ -z "$crate" ] && continue
+            echo "testing $crate"
+            cargo test -p "$crate"
+          done < xtask/data/portable_crates.txt
+
+  protected:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Protected path ADR check
+        working-directory: kuro-rs
+        run: cargo xtask check protected --base "origin/${{ github.base_ref }}"

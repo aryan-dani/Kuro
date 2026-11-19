@@ -2,7 +2,7 @@
   "name": "Kuro Daily Digest",
   "meta": {
     "templateCredsSetupRequired": true,
-    "description": "Cron 20:00 Asia/Kolkata → Gmail last 24h → Groq digest → Telegram (skip if empty).",
+    "description": "Cron 20:00 UTC → Gmail last 24h → Groq digest → Telegram (skip if empty).",
     "promptFile": "prompts/groq_digest.txt",
     "delivery": "telegram"
   },
@@ -16,7 +16,7 @@
           "interval": [{ "field": "cronExpression", "expression": "0 20 * * *" }]
         }
       },
-      "notes": "Set workflow timezone to Asia/Kolkata"
+      "notes": "Set workflow timezone to UTC or your locale"
     },
     {
       "id": "gmail_search",
@@ -83,6 +83,6 @@
     "Groq Digest": { "main": [[{ "node": "Parse Digest", "type": "main", "index": 0 }]] },
     "Parse Digest": { "main": [[{ "node": "Telegram Digest", "type": "main", "index": 0 }]] }
   },
-  "settings": { "executionOrder": "v1", "timezone": "Asia/Kolkata" },
+  "settings": { "executionOrder": "v1", "timezone": "UTC" },
   "active": false
 }

@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -32,7 +32,7 @@ function Get-File([string]$Url, [string]$Out) {
     }
     catch {
         Remove-Item -Force "$Out.partial" -ErrorAction SilentlyContinue
-        Write-Warning "Skip (unavailable): $Url — $($_.Exception.Message)"
+        Write-Warning "Skip (unavailable): $Url - $($_.Exception.Message)"
     }
 }
 

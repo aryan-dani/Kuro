@@ -1,0 +1,19 @@
+id = "recall"
+title = "Recall"
+tier = "read_only"
+default_enabled = true
+priority = 12
+
+[[intents]]
+id = "recall.repeat"
+exact = ["repeat", "say that again", "again", "what did you say"]
+
+[[intents]]
+id = "recall.last_question"
+exact = ["what was my question", "last question", "what did I ask"]
+
+[replies]
+empty_repeat = "I do not have anything to repeat yet."
+empty_question = "I do not have a recent question saved."
+repeat_ok = "{text}"
+question_ok = "You asked: {text}"

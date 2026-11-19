@@ -10,9 +10,11 @@ try {
     if ($configured -ne ".githooks") {
         throw "core.hooksPath is '$configured', expected '.githooks'"
     }
-    $hook = Join-Path $Root ".githooks\pre-commit"
-    if (-not (Test-Path -LiteralPath $hook)) {
-        throw "Missing pre-commit hook at $hook"
+    foreach ($name in @("pre-commit", "pre-push")) {
+        $hook = Join-Path $Root ".githooks\$name"
+        if (-not (Test-Path -LiteralPath $hook)) {
+            throw "Missing $name hook at $hook"
+        }
     }
     Write-Host "Git hooks installed: core.hooksPath=.githooks"
 }

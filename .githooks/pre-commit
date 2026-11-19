@@ -1,7 +1,8 @@
 #!/bin/sh
 HOOK_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-GATE="$HOOK_DIR/../scripts/Test-KuroGate.ps1"
+ROOT=$(CDPATH= cd -- "$HOOK_DIR/.." && pwd)
 if command -v pwsh >/dev/null 2>&1; then
-  exec pwsh -NoProfile -ExecutionPolicy Bypass -File "$GATE"
+  exec pwsh -NoProfile -Command "Set-Location '$ROOT/kuro-rs'; cargo xtask gate fast"
 fi
-exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$GATE"
+cd "$ROOT/kuro-rs" || exit 1
+exec cargo xtask gate fast

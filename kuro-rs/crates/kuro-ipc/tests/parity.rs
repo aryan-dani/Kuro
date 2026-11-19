@@ -31,6 +31,7 @@ fn state(dir: &std::path::Path) -> Arc<AppState> {
         shutdown_hits: Mutex::new(0),
         shutdown_hook: Mutex::new(None),
         clock: Arc::new(Mutex::new(kuro_core::TurnClock::default())),
+        turn_busy: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         hud_wake: Arc::new(Notify::new()),
     })
 }
@@ -107,6 +108,7 @@ async fn say_uses_the_phrase_router() {
     assert_eq!(status, StatusCode::OK);
     let data: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(data["matched"], true);
+    assert_eq!(data["dry_run"], true);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -65,23 +65,27 @@ fn titles(xml: &str) -> Vec<String> {
 }
 
 pub fn inbox_run(arguments: &Value) -> String {
+    let url = std::env::var("N8N_INBOX_WEBHOOK_URL").unwrap_or_default();
+    inbox_run_to(arguments, url.trim())
+}
+
+pub fn inbox_run_to(arguments: &Value, url: &str) -> String {
     let mut mode = arguments.get("mode").and_then(|v| v.as_str()).unwrap_or("summary").trim().to_ascii_lowercase();
     if !["summary", "deadlines", "urgent"].contains(&mode.as_str()) {
         mode = "summary".into();
     }
-    let url = std::env::var("N8N_INBOX_WEBHOOK_URL").unwrap_or_default();
     if url.trim().is_empty() {
         return "I couldn't reach the cloud inbox.".into();
     }
     let secret = std::env::var("N8N_WEBHOOK_SECRET").unwrap_or_default();
     let body = json!({"mode": mode}).to_string();
-    let mut req = ureq::post(url.trim());
+    let mut req = ureq::post(url.trim()).timeout(std::time::Duration::from_secs(8));
     req = req.set("Content-Type", "application/json");
     if !secret.is_empty() {
         req = req.set("X-Webhook-Secret", &secret);
     }
     let Ok(resp) = req.send_string(&body) else {
-        return "I couldn't reach the cloud inbox.".into();
+        return "The inbox is taking too long.".into();
     };
     let Ok(text) = resp.into_string() else {
         return "I couldn't reach the cloud inbox.".into();
@@ -101,6 +105,10 @@ pub fn inbox_run(arguments: &Value) -> String {
 }
 
 pub fn screen_run(arguments: &Value) -> String {
+    screen_run_to(arguments, &crate::brain::ollama_chat_url())
+}
+
+pub fn screen_run_to(arguments: &Value, chat_url: &str) -> String {
     let question = arguments.get("question").and_then(|v| v.as_str()).unwrap_or("").trim();
     let Some(png) = capture_png() else {
         return "I couldn't read the screen.".into();
@@ -117,8 +125,15 @@ pub fn screen_run(arguments: &Value) -> String {
         "stream": false
     })
     .to_string();
-    let url = crate::brain::ollama_chat_url();
-    let Ok(resp) = ureq::post(&url).set("Content-Type", "application/json").send_string(&body) else {
+    vision_post(chat_url, &body)
+}
+
+fn vision_post(chat_url: &str, body: &str) -> String {
+    let Ok(resp) = ureq::post(chat_url)
+        .timeout(std::time::Duration::from_secs(30))
+        .set("Content-Type", "application/json")
+        .send_string(body)
+    else {
         return "I couldn't read the screen.".into();
     };
     let Ok(text) = resp.into_string() else {
@@ -137,4 +152,48 @@ pub fn screen_run(arguments: &Value) -> String {
 
 fn capture_png() -> Option<Vec<u8>> {
     crate::screen::capture_primary_png()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+    use std::net::TcpListener;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn inbox_hung_server_times_out() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let url = format!("http://{addr}/inbox");
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0_u8; 2048];
+                let _ = stream.read(&mut buf);
+                std::thread::sleep(Duration::from_secs(30));
+            }
+        });
+        let start = Instant::now();
+        let reply = inbox_run_to(&json!({"mode": "summary"}), &url);
+        assert_eq!(reply, "The inbox is taking too long.");
+        assert!(start.elapsed() < Duration::from_secs(9));
+    }
+
+    #[test]
+    fn screen_hung_model_times_out() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let url = format!("http://{addr}/api/chat");
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0_u8; 4096];
+                let _ = stream.read(&mut buf);
+                std::thread::sleep(Duration::from_secs(60));
+            }
+        });
+        let start = Instant::now();
+        let reply = vision_post(&url, "{}");
+        assert_eq!(reply, "I couldn't read the screen.");
+        assert!(start.elapsed() < Duration::from_secs(31));
+    }
 }

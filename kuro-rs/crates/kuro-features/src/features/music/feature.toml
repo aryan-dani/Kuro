@@ -1,0 +1,25 @@
+id = "music"
+title = "Music playback"
+tier = "reversible"
+default_enabled = true
+priority = 15
+
+[[intents]]
+id = "music.pause"
+exemplars = ["pause the song", "pause music", "hold the music"]
+
+[[intents]]
+id = "music.resume"
+exemplars = ["resume playback", "keep playing", "unpause"]
+
+[[intents]]
+id = "music.stop"
+exemplars = ["stop the music", "kill the music", "stop playing audio"]
+
+[replies]
+pause_idle = "Nothing is playing."
+resume_idle = "Nothing to resume."
+stop = "Music stopped."
+pause_ok = "Paused."
+resume_ok = "Resumed."
+unavailable = "Music player is unavailable."

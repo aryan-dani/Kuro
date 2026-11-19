@@ -1,0 +1,11 @@
+---
+description: PROTECTED paths require ADR before edit
+globs: kuro-rs/crates/kuro-hotkey/**,kuro-rs/crates/kuro-core/src/epoch.rs,kuro-rs/crates/kuro-core/src/token.rs,kuro-rs/crates/kuro-ipc/src/lib.rs,KuroShell/KuroShell/EngineSupervisor.cs,KuroShell/KuroShell/EngineJson.cs,KuroShell/KuroShell/EscapeHook.cs,scripts/Test-KuroGate.ps1,scripts/Test-KuroInvariants.ps1,.githooks/**,.github/**,kuro-rs/xtask/data/**,contract/**
+alwaysApply: false
+---
+Stop. This path is PROTECTED.
+Do not edit without an ADR number from the user.
+Add or update `docs/adr/NNNN-*.md` and use commit trailer `ADR: NNNN`.
+See `kuro-rs/xtask/data/protected_paths.txt` for the canonical glob list.
+`cargo xtask check protected --base <ref>` must pass before merge.
+If unsure which ADR applies, ask the user before typing.

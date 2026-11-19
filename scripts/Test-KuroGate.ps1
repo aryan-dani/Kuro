@@ -4,10 +4,8 @@ $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
 $Manifest = Join-Path $Root "kuro-rs\Cargo.toml"
-$ShellProj = Join-Path $Root "KuroShell\KuroShell\KuroShell.csproj"
-$ShellTests = Join-Path $Root "KuroShell\KuroShell.Tests\KuroShell.Tests.csproj"
 $EngineRelease = Join-Path $Root "kuro-rs\target\release\kuro-engine.exe"
-$Invariants = Join-Path $Root "scripts\Test-KuroInvariants.ps1"
+$GateTarget = Join-Path $Root "kuro-rs\target\gate"
 
 function Write-Stage([string]$Name, [bool]$Ok, [double]$Seconds) {
     $tag = if ($Ok) { "[PASS]" } else { "[FAIL]" }
@@ -35,16 +33,6 @@ function Ensure-LibClang {
     }
 }
 
-function Stop-LockingKuro {
-    Get-Process -Name KuroShell, kuro-engine -ErrorAction SilentlyContinue |
-        Stop-Process -Force -ErrorAction SilentlyContinue
-    $lock = Join-Path $env:LOCALAPPDATA "Kuro\kuro.lock"
-    if (Test-Path -LiteralPath $lock) {
-        Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
-    }
-    Start-Sleep -Milliseconds 300
-}
-
 function Invoke-Stage {
     param([string]$Name, [scriptblock]$Action)
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -61,91 +49,38 @@ function Invoke-Stage {
 
 Ensure-LibClang
 
-$wasRunning = @(Get-Process -Name KuroShell, kuro-engine -ErrorAction SilentlyContinue).Count -gt 0
-$buildFlag = Join-Path $env:LOCALAPPDATA "Kuro\BUILDING"
-try {
-    New-Item -ItemType File -Force -Path $buildFlag | Out-Null
-} catch { }
-
-try {
-Invoke-Stage "1 Process lock clean" {
-    Stop-LockingKuro
-}
-
-Invoke-Stage "2 Test-KuroInvariants" {
-    & $Invariants
-    if ($LASTEXITCODE -ne 0) { throw "invariants failed" }
-}
-
-Invoke-Stage "3 cargo fmt + clippy" {
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    try {
-        Push-Location (Join-Path $Root "kuro-rs")
-        cargo fmt --manifest-path $Manifest --all -- --check
-        if ($LASTEXITCODE -ne 0) { throw "fmt check failed" }
-        cargo clippy --manifest-path $Manifest --workspace --all-targets -- -D warnings
-        if ($LASTEXITCODE -ne 0) { throw "clippy failed" }
+Invoke-Stage "1 cargo xtask gate full" {
+    Push-Location (Join-Path $Root "kuro-rs")
+  try {
+        cargo xtask gate full
+        if ($LASTEXITCODE -ne 0) { throw "cargo xtask gate full failed" }
     }
     finally {
         Pop-Location
-        $ErrorActionPreference = $prevEap
     }
 }
 
-Invoke-Stage "4 cargo test" {
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    try {
-        Push-Location (Join-Path $Root "kuro-rs")
-        $log = Join-Path $env:TEMP ("kuro-gate-cargo-test-{0}.log" -f [guid]::NewGuid().ToString("N"))
-        cargo test --manifest-path $Manifest --workspace -- --nocapture *> $log
-        $code = $LASTEXITCODE
-        if ($code -ne 0) {
-            Write-Host "----- cargo test tail -----"
-            Get-Content -LiteralPath $log -Tail 80 -ErrorAction SilentlyContinue
-            Write-Host "----- end cargo test tail -----"
-            throw "cargo test failed"
-        }
-    }
-    finally {
-        Pop-Location
-        $ErrorActionPreference = $prevEap
-    }
-}
-
-Invoke-Stage "5 dotnet build + test" {
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    try {
-        dotnet build $ShellProj -c Debug -p:Platform=x64 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "shell build failed" }
-        dotnet test $ShellTests -c Debug -p:Platform=x64 --no-build 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "shell tests failed" }
-    }
-    finally {
-        $ErrorActionPreference = $prevEap
-    }
-}
-
-Invoke-Stage "6 live smoke kuro-engine" {
+Invoke-Stage "2 live smoke kuro-engine" {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     $smokeEngine = $EngineRelease
     if ($env:CI -or -not (Test-Path -LiteralPath $EngineRelease)) {
         Push-Location (Join-Path $Root "kuro-rs")
         try {
-            cargo build --manifest-path $Manifest --release -p kuro-engine
+            $env:CARGO_TARGET_DIR = $GateTarget
+            cargo build --manifest-path $Manifest -p kuro-engine
             if ($LASTEXITCODE -ne 0) { throw "engine build failed" }
         }
         finally {
             Pop-Location
+            Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
         }
-        $smokeEngine = $EngineRelease
+        $smokeEngine = Join-Path $GateTarget "release\kuro-engine.exe"
+        if (-not (Test-Path -LiteralPath $smokeEngine)) {
+            $smokeEngine = Join-Path $GateTarget "debug\kuro-engine.exe"
+        }
     }
     else {
-        # Local commits often have kuro-engine.exe locked by the live process.
-        # Copy (read) into TEMP so smoke does not need to overwrite the running binary.
         $smokeEngine = Join-Path $env:TEMP ("kuro-gate-smoke-{0}.exe" -f [guid]::NewGuid().ToString("N"))
         Copy-Item -LiteralPath $EngineRelease -Destination $smokeEngine -Force
     }
@@ -164,6 +99,7 @@ Invoke-Stage "6 live smoke kuro-engine" {
     $env:KURO_API = "on"
     $env:KURO_API_PORT = "18799"
     $env:KURO_GATE_CI = "1"
+    $env:KURO_SAY_EXECUTE = "1"
     $proc = Start-Process -FilePath $smokeEngine -PassThru -WindowStyle Hidden
     Start-Sleep -Seconds 2
     try {
@@ -171,7 +107,7 @@ Invoke-Stage "6 live smoke kuro-engine" {
         $status = Invoke-RestMethod -Uri "http://127.0.0.1:18799/status" -Headers $headers -Method Get
         if (-not $status.ok) { throw "status not ok" }
         $say = Invoke-RestMethod -Uri "http://127.0.0.1:18799/say" -Headers $headers -Method Post `
-            -ContentType "application/json" -Body '{"text":"who are you"}'
+            -ContentType "application/json" -Body '{"text":"who are you","mode":"execute"}'
         if ($say.reply -notlike "*Kuro. Local assistant. Phrases first, model last.*") {
             throw "unexpected say reply: $($say.reply)"
         }
@@ -188,22 +124,12 @@ Invoke-Stage "6 live smoke kuro-engine" {
         Remove-Item -LiteralPath $data -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item Env:KURO_DATA_DIR -ErrorAction SilentlyContinue
         Remove-Item Env:KURO_GATE_CI -ErrorAction SilentlyContinue
+        if ($smokeEngine -like "$env:TEMP\*") {
+            Remove-Item -LiteralPath $smokeEngine -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
 Write-Host "[PASS] Test-KuroGate (all stages)"
-}
-finally {
-    Remove-Item -LiteralPath $buildFlag -Force -ErrorAction SilentlyContinue
-    if ($wasRunning -or (-not $env:CI -and -not (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "Kuro\DISABLED")))) {
-        Write-Host "Restarting Kuro service after gate pass..."
-        try {
-            & (Join-Path $PSScriptRoot "Start-Kuro.ps1")
-        }
-        catch {
-            Write-Warning "Could not restart Kuro: $($_.Exception.Message)"
-        }
-    }
-}
-
+Write-Host "Note: this gate does not stop or restart your daily Kuro process."
 exit 0

@@ -1,0 +1,22 @@
+id = "system"
+title = "System control"
+tier = "reversible"
+default_enabled = false
+priority = 16
+
+[[intents]]
+id = "system.volume_set"
+exact = ["set volume", "volume to"]
+
+[[intents]]
+id = "system.mute"
+exact = ["mute", "mute volume", "silence"]
+
+[[intents]]
+id = "system.lock"
+exact = ["lock workstation", "lock computer", "lock the pc"]
+
+[replies]
+volume_ok = "Volume set to {level} percent."
+mute_ok = "Muted."
+lock_ok = "Locking now."

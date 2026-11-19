@@ -1,0 +1,12 @@
+---
+description: Markdown and plan docs
+globs: docs/**,**/*.md
+alwaysApply: false
+---
+No emoji, no em dashes, no en dashes in tracked markdown.
+`docs/plans/README.md` is the repo map until `docs/REPO_MAP.md` is generated (phase 11).
+`docs/CONFIG.md` and `docs/features/**` are generated later; do not hand-edit stubs.
+Folder `README.md` files stay under about 60 lines when you add them.
+ADRs live in `docs/adr/` with the next free number and index entry.
+Link ADR numbers in commit trailers for PROTECTED path work.
+Plans in `docs/plans/` are spec; code wins when they disagree.

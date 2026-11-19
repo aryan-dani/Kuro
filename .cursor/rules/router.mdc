@@ -1,0 +1,13 @@
+---
+description: Phrase routing and router corpus
+globs: kuro-rs/crates/kuro-router/**,kuro-rs/fixtures/phrases/**
+alwaysApply: false
+---
+Add the failing corpus case in `fixtures/phrases/` before fixing routing.
+The router classifies and ranks only; it never executes tools or side effects.
+Phrase data lives in fixtures and TOML, not hard-coded in unrelated crates.
+Changing a threshold or stage order needs a corpus diff in the PR description.
+Keep normalization and semantic stages testable without network or ONNX at gate time.
+Refactor PRs must leave golden corpus files byte-identical.
+Run router crate tests and `cargo xtask gate fast` before finishing.
+Do not pull shell or WinUI dependencies into `kuro-router`.

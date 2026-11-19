@@ -1,0 +1,12 @@
+---
+description: Gate scripts, git hooks, and xtask
+globs: scripts/**,kuro-rs/xtask/**,.githooks/**
+alwaysApply: false
+---
+Scripts are thin wrappers over `cargo xtask` and documented PowerShell stages.
+Never `Stop-Process` or restart a running Kuro instance from checks.
+Never write outside the repo or a temp directory in gate logic.
+Protected path list lives in `kuro-rs/xtask/data/`; edit only with ADR 0018.
+`Test-KuroGate.ps1` and `Test-KuroInvariants.ps1` are PROTECTED.
+Prefer adding checks to `xtask` over duplicating logic in bash-only tools.
+Hooks call `gate fast` on commit and `gate full` on push; keep them fast.

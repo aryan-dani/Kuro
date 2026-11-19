@@ -1,0 +1,17 @@
+# Generated-style map of protected paths. Replace @owner with the real handle.
+# Prefer: cargo xtask gen codeowners --owner <handle> (phase 11).
+
+/kuro-rs/crates/kuro-hotkey/ @owner
+/kuro-rs/crates/kuro-core/src/epoch.rs @owner
+/kuro-rs/crates/kuro-core/src/token.rs @owner
+/kuro-rs/crates/kuro-ipc/ @owner
+/KuroShell/KuroShell/EngineSupervisor.cs @owner
+/KuroShell/KuroShell/EngineJson.cs @owner
+/KuroShell/KuroShell/EscapeHook.cs @owner
+/scripts/Test-KuroGate.ps1 @owner
+/scripts/Test-KuroInvariants.ps1 @owner
+/.githooks/ @owner
+/.github/ @owner
+/kuro-rs/xtask/data/ @owner
+/contract/ @owner
+/docs/adr/ @owner

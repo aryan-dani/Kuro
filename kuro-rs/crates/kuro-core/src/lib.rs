@@ -6,6 +6,7 @@ mod epoch;
 mod mem;
 pub mod models;
 mod paths;
+mod permission;
 mod timing;
 mod token;
 mod voice;
@@ -17,6 +18,7 @@ pub use config::{ConfigError, EngineConfig, apply_config, mask_id, mask_number, 
 pub use epoch::{FollowUp, HudState, TurnClock, follow_up_for, prefer_transcript};
 pub use models::{kokoro_dir, resolve_model_dir, router_embed_onnx, router_embed_vocab, silero_vad_onnx};
 pub use paths::KuroPaths;
+pub use permission::{ActionSource, PermissionTier, needs_confirm};
 pub use timing::Timing;
 pub use token::{api_port, api_requested, ensure_token, load_token, token_matches};
 pub use voice::voice_level;

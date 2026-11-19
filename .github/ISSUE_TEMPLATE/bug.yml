@@ -1,0 +1,25 @@
+name: Bug report
+description: Something broke or behaved unexpectedly
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor / environment
+      description: Paste kuro doctor --json when available; otherwise OS, Rust, .NET, model presence. Redact tokens.
+    validations:
+      required: false

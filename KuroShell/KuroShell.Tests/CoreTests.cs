@@ -1,10 +1,50 @@
 using KuroShell.Core;
+using KuroShell.Core.Protocol;
 using Xunit;
 
 namespace KuroShell.Tests;
 
 public class CoreTests
 {
+    [Fact]
+    public void Protocol_compatible_with_same_major()
+    {
+        Assert.True(ProtocolVersion.CompatibleWith(ProtocolVersion.Current));
+        Assert.True(ProtocolVersion.CompatibleWith(1));
+    }
+
+    [Fact]
+    public void Protocol_different_major_not_compatible()
+    {
+        Assert.False(ProtocolVersion.CompatibleWith(2));
+        Assert.False(ProtocolVersion.CompatibleWith(99));
+    }
+
+    [Fact]
+    public void Engine_hello_parses_compatible_protocol()
+    {
+        var hello = EngineHello.ParseRequired("""{"protocol":1,"engine":"0.1.0"}""");
+        Assert.Equal(1u, hello.Protocol);
+        Assert.Equal("0.1.0", hello.Engine);
+    }
+
+    [Fact]
+    public void Engine_hello_rejects_incompatible_protocol()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            EngineHello.ParseRequired("""{"protocol":99,"engine":"0.1.0"}"""));
+        Assert.Contains("not compatible", ex.Message);
+    }
+
+    [Fact]
+    public void RereadsTokenOnUnauthorized()
+    {
+        Assert.True(ApiAuthRetry.ShouldRereadTokenOnce(0, 401, pipeDenied: false));
+        Assert.False(ApiAuthRetry.ShouldRereadTokenOnce(1, 401, pipeDenied: false));
+        Assert.True(ApiAuthRetry.ShouldRereadTokenOnce(0, null, pipeDenied: true));
+        Assert.False(ApiAuthRetry.ShouldRereadTokenOnce(1, null, pipeDenied: true));
+    }
+
     [Fact]
     public void Backoff_doubles_and_caps()
     {
@@ -87,5 +127,16 @@ public class CoreTests
         Assert.Empty(buffer.Turns);
         Assert.True(buffer.Observe("fresh", "Yes.", "t"));
         Assert.Equal("fresh", buffer.Turns[0].You);
+    }
+
+    [Fact]
+    public void Shell_navigation_registry_and_aliases()
+    {
+        Assert.Equal("Conversation", ShellNavigation.NormalizePage("General"));
+        Assert.Equal("System", ShellNavigation.NormalizePage("Logs"));
+        Assert.Equal(PageIds.Health, ShellNavigation.NormalizePage(PageIds.Health));
+        Assert.True(ShellNavigation.IsRegistryPage(PageIds.Phrases));
+        Assert.False(ShellNavigation.IsRegistryPage("Voice"));
+        Assert.Equal("Conversation", ShellNavigation.NormalizePage("Unknown"));
     }
 }

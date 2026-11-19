@@ -1,0 +1,11 @@
+---
+description: Turn state machine and epoch cancel
+globs: kuro-rs/crates/kuro-turn/**,kuro-rs/crates/kuro-core/src/epoch.rs
+alwaysApply: false
+---
+PROTECTED slice: ADR 0008 for `kuro-turn/src/machine/**` and coordinated epoch edits.
+`step` is pure: no I/O, no clock reads, no port calls inside the machine.
+Every new transition needs a scenario test in `kuro-turn/tests/`.
+Cancel must reach `Idle` from every state in tests.
+Run `cargo test -p kuro-turn` and `cargo xtask gate fast` before finishing.
+Do not rewrite `VoiceTurn::run` until the wiring slice explicitly allows it.

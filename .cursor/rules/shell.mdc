@@ -1,0 +1,13 @@
+---
+description: WinUI shell and KuroShell.Core
+globs: KuroShell/**
+alwaysApply: false
+---
+Put logic in `KuroShell.Core` with tests; keep XAML code-behind thin.
+The shell supervises the engine process; it does not own hold-to-talk hotkey logic.
+Never register a global hotkey from the shell project.
+Only `CapsulePlacement.cs` (when present) positions the capsule HUD.
+No `async void` except through existing helpers.
+IPC DTO changes start in `contract/` once the protocol crate lands (phase 15).
+Do not embed tool routing or phrase tables in the shell.
+Run shell tests via `cargo xtask gate fast` (includes dotnet when shell changes).

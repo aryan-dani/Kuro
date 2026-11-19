@@ -1,0 +1,14 @@
+# Composed brief steps. Optional steps are skipped when data is missing or slots opt out.
+
+[[steps]]
+feature = "weather"
+intent = "weather.now"
+
+[[steps]]
+feature = "calendar"
+intent = "calendar.today"
+
+[[steps]]
+feature = "recall"
+intent = "recall.last_question"
+optional = true

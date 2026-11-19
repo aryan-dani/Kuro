@@ -1,0 +1,12 @@
+kuro-rs/crates/kuro-hotkey/**
+kuro-rs/crates/kuro-core/src/epoch.rs
+kuro-rs/crates/kuro-core/src/token.rs
+kuro-rs/crates/kuro-ipc/src/lib.rs
+KuroShell/KuroShell/EngineSupervisor.cs
+KuroShell/KuroShell/EngineJson.cs
+KuroShell/KuroShell/EscapeHook.cs
+scripts/Test-KuroGate.ps1
+scripts/Test-KuroInvariants.ps1
+.githooks/**
+.github/**
+kuro-rs/xtask/data/**

@@ -1,0 +1,12 @@
+id = "thanks"
+title = "Thanks"
+tier = "read_only"
+default_enabled = true
+priority = 5
+
+[[intents]]
+id = "thanks.reply"
+exemplars = ["thank you", "thanks", "cheers", "appreciate it"]
+
+[replies]
+ok = "Anytime."

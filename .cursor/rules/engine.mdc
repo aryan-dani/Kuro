@@ -1,0 +1,13 @@
+---
+description: Engine process, voice loop, and local API
+globs: kuro-rs/crates/kuro-engine/**
+alwaysApply: false
+---
+Owns the voice turn loop, HUD hooks, and binding to `kuro-tools` execution.
+Do not implement individual tools here; call into `kuro-tools` instead.
+Hotkey capture stays in `kuro-hotkey`; the shell must not register a global hotkey.
+Epoch dismiss and cancel flow through `kuro-core` epoch helpers.
+API surface changes need matching tests in `kuro-engine/tests/`.
+Keep `main.rs` thin; grow behavior in `lib.rs` modules with tests.
+Panic boundaries stay at documented catch sites; do not add unguarded `unwrap` on I/O.
+No new listeners off 127.0.0.1 without an ADR.

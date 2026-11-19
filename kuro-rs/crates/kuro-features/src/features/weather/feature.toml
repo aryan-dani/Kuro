@@ -1,0 +1,15 @@
+id = "weather"
+title = "Weather"
+tier = "read_only"
+default_enabled = false
+priority = 7
+
+[[intents]]
+id = "weather.now"
+exact = ["weather", "what is the weather", "how is the weather", "temperature outside"]
+exemplars = ["current weather", "weather now", "is it raining"]
+
+[replies]
+not_configured = "Weather is not configured. Set a location in your profile."
+now_ok = "It is {temp} degrees."
+parse_error = "I could not read the weather data."

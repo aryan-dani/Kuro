@@ -1,0 +1,12 @@
+id = "cancel"
+title = "Cancel"
+tier = "read_only"
+default_enabled = true
+priority = 5
+
+[[intents]]
+id = "cancel.dismiss"
+exact = ["cancel", "never mind", "nevermind", "forget it", "stop", "abort"]
+
+[replies]
+ok = "Alright."

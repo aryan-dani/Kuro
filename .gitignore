@@ -1,6 +1,7 @@
 # Rust engine build output
 kuro-rs/target/
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -8,6 +9,7 @@ __pycache__/
 env/
 venv/
 .venv/
+.venv*/
 build/
 develop-eggs/
 dist/
@@ -24,6 +26,12 @@ wheels/
 .installed.cfg
 *.egg
 
+# Local config profiles (secrets and personal overrides)
+profiles/*/
+!profiles/example/
+profiles/*/secrets.toml
+profiles/**/secrets.toml
+
 # Secrets and environment
 credentials.json
 token.json
@@ -34,6 +42,7 @@ token.json
 
 # Local caches / device discovery (may contain IDs)
 snapshot.json
+personal_denylist.local.txt
 api_token
 timing.csv
 timing_*.csv
@@ -73,8 +82,8 @@ Thumbs.db
 
 # Temp audio / screens
 *.wav
+!kuro-rs/fixtures/audio/*.wav
 *.mp3
-*.png
-!assets/branding/*.png
+overlay_check.png
 *.jpg
 temp/

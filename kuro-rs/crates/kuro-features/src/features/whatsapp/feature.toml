@@ -1,0 +1,18 @@
+# Optional external tool: neonize send and contact DB reads stay in kuro-tools.
+id = "whatsapp"
+title = "WhatsApp"
+tier = "external_send"
+default_enabled = true
+priority = 26
+
+[[intents]]
+id = "whatsapp.send"
+exemplars = ["send this link on whatsapp", "text my clipboard on whatsapp"]
+
+[replies]
+sent = "Sent."
+unknown_contact = "I don't know who to message."
+unknown_source = "I don't know how to send that."
+empty_payload = "There is nothing to send."
+empty_clipboard = "The clipboard is empty. Copy text or an image first."
+browser_link_failed = "I could not copy a link from the browser."

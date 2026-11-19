@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /kuro-rs
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+  - package-ecosystem: nuget
+    directory: /KuroShell
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

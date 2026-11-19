@@ -68,7 +68,7 @@ def _cmd_wavs() -> list[Path]:
 
 
 def run_idle(seconds: int) -> dict:
-    print(f"IDLE {seconds}s — models unloaded")
+    print(f"IDLE {seconds}s - models unloaded")
     samples = []
     t0 = time.time()
     while time.time() - t0 < seconds:
@@ -168,14 +168,14 @@ def main() -> int:
             savings = (cuda_m - npu_m) / cuda_m * 100.0
             if savings < 10.0:
                 note = (
-                    f"NPU saves {savings:.1f}% vs CUDA — less than 10%. "
+                    f"NPU saves {savings:.1f}% vs CUDA - less than 10%. "
                     "Say plainly: NPU power win is under the 10% bar."
                 )
             else:
                 note = f"NPU saves {savings:.1f}% vs CUDA (>= 10%)."
     payload = {"meta": meta, "results": results, "verdict": note}
     OUT.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(note or "(incomplete — need both npu and cuda means)")
+    print(note or "(incomplete - need both npu and cuda means)")
     print("Wrote", OUT)
     return 0
 

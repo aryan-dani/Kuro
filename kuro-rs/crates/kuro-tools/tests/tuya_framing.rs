@@ -53,6 +53,28 @@ fn v35_frame_is_6699_gcm() {
 }
 
 #[test]
+fn nonce_never_repeats() {
+    let local_key = "0123456789abcdef";
+    let device = "device-123";
+    let a = tuya::control_frame(3.5, 1, local_key, device, true).expect("frame");
+    let b = tuya::control_frame(3.5, 2, local_key, device, true).expect("frame");
+    assert_ne!(a, b);
+    let packed_a = tuya::encrypt_gcm(&key(), &[9; 12], br#"{"dps":{"1":true}}"#);
+    let round = tuya::decrypt_gcm(&key(), &packed_a).expect("round trip");
+    assert_eq!(round, br#"{"dps":{"1":true}}"#);
+}
+
+#[test]
+fn seq_increases() {
+    let frames = (1..=3)
+        .map(|seq| tuya::control_frame(3.5, seq, "0123456789abcdef", "device-123", true).expect("frame"))
+        .collect::<Vec<_>>();
+    assert_eq!(frames[0][8..12], 1u32.to_be_bytes());
+    assert_eq!(frames[1][8..12], 2u32.to_be_bytes());
+    assert_eq!(frames[2][8..12], 3u32.to_be_bytes());
+}
+
+#[test]
 fn png_encoder_writes_a_signature() {
     let png = encode_png(1, 1, &[255, 0, 0, 255]).unwrap();
     assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");

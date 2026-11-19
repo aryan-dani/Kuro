@@ -11,6 +11,9 @@ path = "src/main.rs"
 
 [dependencies]
 kuro-core = { path = "../kuro-core" }
+kuro-turn = { path = "../kuro-turn" }
+kuro-config = { path = "../kuro-config" }
+kuro-triggers = { path = "../kuro-triggers" }
 kuro-hotkey = { path = "../kuro-hotkey" }
 kuro-ipc = { path = "../kuro-ipc" }
 kuro-router = { path = "../kuro-router" }
@@ -19,7 +22,13 @@ kuro-wifi = { path = "../kuro-wifi" }
 kuro-audio = { path = "../kuro-audio" }
 kuro-stt = { path = "../kuro-stt" }
 kuro-tts = { path = "../kuro-tts" }
+kuro-llm = { path = "../kuro-llm" }
+kuro-features = { path = "../kuro-features" }
 tokio = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
 [lints]
 workspace = true
 

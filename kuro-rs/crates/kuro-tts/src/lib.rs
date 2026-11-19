@@ -369,17 +369,3 @@ where
 pub fn play_pcm(pcm: &[f32]) -> Result<(), String> {
     play_pcm_live(pcm, &|| true, &mut || {})
 }
-
-pub fn speak_sapi(text: &str) -> Result<(), String> {
-    let script = format!(
-        "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak({text:?})"
-    );
-    let mut cmd = std::process::Command::new("powershell");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
-    }
-    let status = cmd.args(["-NoProfile", "-Command", &script]).status().map_err(|err| err.to_string())?;
-    if status.success() { Ok(()) } else { Err("Windows speech failed.".into()) }
-}

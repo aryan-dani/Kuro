@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using KuroShell.Core.Supervisor;
 
 namespace KuroShell;
 
@@ -8,8 +9,9 @@ public sealed class EngineSupervisor
 {
     private const string MutexName = @"Global\KuroAssistantSingleton.v1";
     private Process? _process;
-    private int _failures;
+    private readonly RestartPolicy _restartPolicy = new();
     private bool _stopRequested;
+    private bool _manualRestartInProgress;
 
     public string Status { get; private set; } = "stopped";
     public bool Attached { get; private set; }
@@ -34,10 +36,15 @@ public sealed class EngineSupervisor
         return null;
     }
 
-    public static string EnsureToken()
+    public static string TokenFilePath()
     {
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var path = Path.Combine(root, "Kuro", "api_token");
+        return Path.Combine(root, "Kuro", "api_token");
+    }
+
+    public static string EnsureToken()
+    {
+        var path = TokenFilePath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         if (!File.Exists(path))
         {
@@ -80,6 +87,7 @@ public sealed class EngineSupervisor
     public void Restart()
     {
         _stopRequested = false;
+        _manualRestartInProgress = true;
         if (_process is { HasExited: false })
         {
             try
@@ -88,17 +96,20 @@ public sealed class EngineSupervisor
             }
             catch (Exception)
             {
+                _manualRestartInProgress = false;
                 Status = "restart failed";
                 Changed?.Invoke();
                 return;
             }
         }
 
-        _failures = Math.Max(_failures, 1);
-        var delay = KuroShell.Core.RestartBackoff.NextDelayMs(_failures);
+        var now = UtcNowMs();
+        _restartPolicy.OnEngineStopped(now);
+        var advice = _restartPolicy.AdviseAfterExit(EngineExitCodes.WatchdogRestart, now);
         Status = "restarting";
         Changed?.Invoke();
-        Thread.Sleep(delay);
+        Thread.Sleep(advice.DelayMs);
+        _manualRestartInProgress = false;
         Attached = false;
         Launch();
     }
@@ -233,7 +244,6 @@ public sealed class EngineSupervisor
         }
         catch (Exception)
         {
-            _failures++;
             Status = "launch failed";
             Changed?.Invoke();
             return;
@@ -256,11 +266,36 @@ public sealed class EngineSupervisor
                 return;
             }
 
-            _failures++;
+            if (_manualRestartInProgress)
+            {
+                return;
+            }
+
+            var exitCode = 0;
+            try
+            {
+                exitCode = _process?.ExitCode ?? 0;
+            }
+            catch (InvalidOperationException)
+            {
+                exitCode = 1;
+            }
+
+            var now = UtcNowMs();
+            _restartPolicy.OnEngineStopped(now);
+            var advice = _restartPolicy.AdviseAfterExit(exitCode, now);
+            if (!advice.ShouldRestart)
+            {
+                Status = advice.ExitKind is EngineExitKind.CleanExit or EngineExitKind.InvalidConfig
+                    ? "stopped"
+                    : "crashed";
+                Changed?.Invoke();
+                return;
+            }
+
             Status = "crashed";
             Changed?.Invoke();
-            var delay = KuroShell.Core.RestartBackoff.NextDelayMs(_failures);
-            Thread.Sleep(delay);
+            Thread.Sleep(advice.DelayMs);
             if (_stopRequested)
             {
                 return;
@@ -277,11 +312,13 @@ public sealed class EngineSupervisor
 
             Launch();
         };
-        _failures = 0;
+        _restartPolicy.OnEngineStarted(UtcNowMs());
         Attached = false;
         Status = "running";
         Changed?.Invoke();
     }
+
+    private static long UtcNowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     private static bool MutexExists()
     {

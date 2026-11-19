@@ -1,0 +1,16 @@
+id = "morning_brief"
+title = "Morning brief"
+tier = "read_only"
+default_enabled = false
+priority = 6
+
+[[intents]]
+id = "morning_brief.run"
+exact = ["morning brief", "give me my morning brief", "run morning brief", "my morning brief"]
+exemplars = ["good morning", "morning report", "daily brief"]
+
+[replies]
+greeting = "Good morning."
+intro = "Here is your morning brief."
+empty = "Your morning brief is empty. Set weather or calendar in your profile."
+disabled = "Morning brief is turned off in your profile."

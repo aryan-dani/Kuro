@@ -5,6 +5,23 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $failures = New-Object System.Collections.Generic.List[string]
 
+function Invoke-XtaskCheck {
+    param([string]$Subcommand)
+    Push-Location (Join-Path $Root "kuro-rs")
+    try {
+        cargo xtask check $Subcommand 2>&1 | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) {
+            Add-Fail "cargo xtask check $Subcommand failed (exit $LASTEXITCODE)"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+Invoke-XtaskCheck "size"
+Invoke-XtaskCheck "text"
+
 function Add-Fail([string]$Message) {
     $failures.Add($Message) | Out-Null
 }
