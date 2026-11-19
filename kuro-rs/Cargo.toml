@@ -83,7 +83,7 @@ axum = { version = "0.7", features = ["ws", "json", "tokio"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 rodio = "0.19"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 cpal = "0.15"
 png = "0.17"
 aes-gcm = "0.10"
