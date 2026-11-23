@@ -37,6 +37,9 @@ pub(crate) fn run_post_hotkey_up(
     mut on_first_audio: impl FnMut(&str),
 ) -> String {
     let PostHotkeyInput { live, final_text, live_match, final_match, epoch, clock, llm_mode, ollama_up } = input;
+    // Soft follow-up and re-entry often call run() from Idle (or leftover Speaking) without a
+    // fresh HotkeyDown. Arm Listening first so HotkeyUp can reach Transcribing.
+    arm_for_release(ctx.runner);
     let _release_effects = ctx.runner.on_event(Event::HotkeyUp);
     ctx.timing.mark("hotkey_up");
 
@@ -56,7 +59,17 @@ pub(crate) fn run_post_hotkey_up(
     }
 
     let _ = ctx.runner.on_event(Event::SttDone { text: text.clone() });
-    debug_assert_eq!(ctx.runner.state(), State::Routing);
+    if ctx.runner.state() != State::Routing {
+        // Never panic the voice thread (debug asserts used to kill the HUD after "thinking").
+        crate::util::log_line(&format!(
+            "turn stuck after SttDone: state={:?} text=`{}`",
+            ctx.runner.state(),
+            text.chars().take(80).collect::<String>()
+        ));
+        let _ = ctx.runner.on_event(Event::Cancel);
+        finish_idle(ctx);
+        return String::new();
+    }
 
     let routed = route_command(&text, live_now, None, llm_mode, ollama_up);
     let (reply, skip_tts, outcome_override) = resolve_route(ctx, &text, &routed, epoch, llm_mode, ollama_up, live_now);
@@ -96,6 +109,24 @@ fn resolve_route(
     (reply, skip_tts, None)
 }
 
+fn arm_for_release(runner: &mut TurnRunner) {
+    match runner.state() {
+        State::Listening | State::FollowUp => {}
+        State::Idle | State::Speaking => {
+            let _ = runner.on_event(Event::HotkeyDown);
+        }
+        State::Transcribing | State::Routing | State::Executing | State::Confirming { .. } | State::Cancelling => {
+            let _ = runner.on_event(Event::Cancel);
+            if runner.state() == State::Cancelling {
+                let _ = runner.on_event(Event::SpeakDone);
+            }
+            if runner.state() == State::Idle {
+                let _ = runner.on_event(Event::HotkeyDown);
+            }
+        }
+    }
+}
+
 fn finish_idle(ctx: &mut RunContext<'_>) {
     ctx.timing.mark("idle");
     ctx.timing.finish(ctx.command_id);
@@ -110,10 +141,18 @@ fn route_and_maybe_chat(
 ) -> (String, bool) {
     let mut routed = routed.clone();
     if routed.reply.is_empty() && routed.start_ollama && ollama_up && live {
-        let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "qwen2.5:7b-instruct".into());
+        // Defense in depth: never ask the model to invent Meet/WhatsApp success.
+        if kuro_tools::honesty::wants_tool_actuation(text) {
+            routed.reply = kuro_tools::honesty::honest_tool_miss(text);
+            return (routed.reply, false);
+        }
+        let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "gemma4:e4b".into());
         let messages = brain.thread(text).to_vec();
         match chat(&model, &messages) {
-            Ok(answer) => routed.reply = brain.remember(&answer),
+            Ok(answer) => {
+                let scrubbed = kuro_tools::honesty::scrub_chat_reply(text, &answer);
+                routed.reply = brain.remember(&scrubbed);
+            }
             Err(err) => routed.reply = err,
         }
     } else if routed.reply.is_empty() && routed.start_ollama && !ollama_up {
@@ -174,6 +213,25 @@ mod tests {
         assert_eq!(turn.runner_state(), State::Idle);
         let (s, _) = step(State::Listening, Event::HotkeyUp);
         assert_eq!(s, State::Transcribing);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn soft_follow_up_run_from_idle_does_not_panic() {
+        let dir = std::env::temp_dir().join(format!("kuro-follow-idle-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("timing.csv");
+        let clock = Arc::new(Mutex::new(TurnClock::default()));
+        let epoch = clock.lock().unwrap().begin_turn();
+        let mut turn = VoiceTurn::new(Timing::new(&path, false));
+        turn.hotkey_down(&clock);
+        let first = turn.run("thank you", "thank you", true, true, epoch, &clock, "off", false, |_| {});
+        assert_eq!(first, "Anytime.");
+        assert_eq!(turn.runner_state(), State::Idle);
+        // Soft follow-up path calls run() again with no HotkeyDown (ptt_release.rs).
+        let second = turn.run("what time is it", "what time is it", true, true, epoch, &clock, "off", false, |_| {});
+        assert!(!second.is_empty(), "follow-up from Idle must still route");
+        assert_eq!(turn.runner_state(), State::Idle);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

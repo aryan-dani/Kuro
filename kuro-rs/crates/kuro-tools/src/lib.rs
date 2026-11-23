@@ -5,11 +5,16 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 
 pub mod brain;
+pub mod contact_bias;
 pub mod feeds;
+pub mod honesty;
 pub mod hub;
 pub mod meet;
 mod meet_busy;
+pub mod meet_followup;
 mod meet_http;
+mod meet_last;
+mod meet_match;
 pub mod music;
 pub mod music_player;
 pub mod n8n;
@@ -96,6 +101,14 @@ impl ToolRegistry {
                     execute: feeds::screen_run,
                 }),
                 Arc::new(KuroTool {
+                    name: "join_meet",
+                    description: "Open a Google Meet link Kuro already created or sent.",
+                    parameters_schema: json!({"type":"object","properties":{"contact":{"type":"string"}}}),
+                    is_local_only: true,
+                    match_phrase: Some(join_meet_match),
+                    execute: meet::run_join,
+                }),
+                Arc::new(KuroTool {
                     name: "make_meet",
                     description: "Open or share a Google Meet link.",
                     parameters_schema: json!({"type":"object","properties":{"contact":{"type":"string"}}}),
@@ -174,8 +187,26 @@ pub fn match_registered_phrase(text: &str) -> Option<(Arc<KuroTool>, Value)> {
     ToolRegistry::default_registry().match_phrase(text)
 }
 
+/// Soft Meet follow-up match (join remembered link). Used by the hybrid agent path.
+pub fn meet_followup_match(text: &str) -> Option<std::collections::HashMap<String, String>> {
+    meet_followup::match_followup(text)
+}
+
+fn join_meet_match(text: &str) -> Option<Value> {
+    let found = meet::match_phrase(text)
+        .filter(|m| m.get("action").map(String::as_str) == Some("join"))
+        .or_else(|| meet_followup::match_followup(text))?;
+    Some(json!({
+        "contact": found.get("contact").cloned().unwrap_or_default(),
+        "action": "join",
+    }))
+}
+
 fn meet_match(text: &str) -> Option<Value> {
     let found = meet::match_phrase(text)?;
+    if found.get("action").map(String::as_str) == Some("join") {
+        return None;
+    }
     Some(json!({
         "contact": found.get("contact").cloned().unwrap_or_default(),
     }))

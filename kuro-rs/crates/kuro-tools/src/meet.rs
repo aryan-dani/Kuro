@@ -1,6 +1,6 @@
 use crate::meet_busy::claim_meet;
 use crate::meet_http::{access_token, google_token_usable};
-use fancy_regex::Regex;
+use crate::meet_last;
 use serde_json::Value;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -19,103 +19,12 @@ pub fn edge_args(edge: &str, link: &str) -> Vec<String> {
     vec![edge.to_string(), format!("--app={link}"), "--start-maximized".into()]
 }
 
-fn normalize(text: &str) -> String {
-    let norm = crate::n8n::normalize(text);
-    let fillers = ["please", "hey", "kuro", "can", "you", "could", "would", "just", "kindly"];
-    let mut toks: Vec<&str> = norm.split_whitespace().collect();
-    while toks.first().is_some_and(|t| fillers.contains(t)) {
-        toks.remove(0);
-    }
-    toks.join(" ")
+/// Engine boot must call this once. Tests and gate leave it off so Meet stays dry.
+pub fn enable_live_meet() {
+    crate::meet_busy::enable_live_meet();
 }
 
-fn clean_name(name: &str) -> String {
-    let re = Regex::new(r"\s+(?:on|in|via)\s+whatsapp$").unwrap();
-    let name = re.replace(name.trim(), "").to_string();
-    let fillers = ["please", "hey", "kuro", "can", "you", "could", "would", "just", "kindly"];
-    let mut toks: Vec<&str> = name.split_whitespace().collect();
-    while toks.last().is_some_and(|t| fillers.contains(t)) {
-        toks.pop();
-    }
-    toks.join(" ")
-}
-
-fn has_meet_word(body: &str) -> bool {
-    // Intentionally omit "meeting"; it matches "meeting notes" and other chat.
-    body.split_whitespace().any(|w| matches!(w, "meet" | "mate" | "meat" | "mete"))
-}
-
-fn extract_send_to(body: &str) -> Option<String> {
-    for marker in ["send it to ", "send the link to ", "send link to ", "send to ", " to "] {
-        if let Some(idx) = body.rfind(marker) {
-            let rest = body[idx + marker.len()..].trim();
-            if rest.is_empty() {
-                continue;
-            }
-            let name = clean_name(rest);
-            if !name.is_empty() && !has_meet_word(&name) {
-                return Some(name);
-            }
-        }
-    }
-    None
-}
-
-/// Long STT lines that merely mention Meet must not open a call.
-fn utterance_is_meet_shaped(body: &str) -> bool {
-    let words: Vec<&str> = body.split_whitespace().collect();
-    if words.len() <= 14 {
-        return true;
-    }
-    let head = words[..8.min(words.len())].join(" ");
-    head.starts_with("make ")
-        || head.starts_with("create ")
-        || head.starts_with("start ")
-        || head.starts_with("open ")
-        || head.starts_with("send ")
-        || head.contains("google meet")
-        || head.contains("google mate")
-        || head.contains("google meat")
-        || head.contains("google mete")
-}
-
-pub fn match_phrase(text: &str) -> Option<std::collections::HashMap<String, String>> {
-    let body = normalize(text);
-    if !utterance_is_meet_shaped(&body) {
-        return None;
-    }
-    let re = Regex::new(
-        r"^(?:(?:make|create|start)\s+(?:a\s+|an\s+)?(?:google\s+)?(?:meet|mate|meat|mete)(?:\s+and\s+send(?:\s+(?:the|this|a))?(?:\s+link)?(?:\s+it)?\s+to\s+(?P<to>.+)|\s+for\s+(?P<forname>.+))?|send\s+(?:me\s+)?(?:the\s+|a\s+|my\s+)?(?:google\s+)?(?:meet|mate|meat|mete)(?:\s+link)?\s+to\s+(?P<sendto>.+))$",
-    )
-    .ok()?;
-    if let Some(caps) = re.captures(&body).ok().flatten() {
-        let raw = caps
-            .name("to")
-            .or_else(|| caps.name("forname"))
-            .or_else(|| caps.name("sendto"))
-            .map(|m| m.as_str())
-            .unwrap_or("");
-        let mut out = std::collections::HashMap::new();
-        out.insert("contact".into(), clean_name(raw));
-        return Some(out);
-    }
-    if !has_meet_word(&body) {
-        return None;
-    }
-    let contact = extract_send_to(&body).unwrap_or_default();
-    if contact.is_empty()
-        && !body.contains("make")
-        && !body.contains("create")
-        && !body.contains("start")
-        && !body.contains("send")
-        && !body.contains("open")
-    {
-        return None;
-    }
-    let mut out = std::collections::HashMap::new();
-    out.insert("contact".into(), contact);
-    Some(out)
-}
+pub use crate::meet_match::{looks_like_meet_request, match_phrase};
 
 fn edge_path() -> Option<PathBuf> {
     let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
@@ -130,27 +39,32 @@ fn edge_path() -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
+/// Open Edge unless `KURO_MEET_OPEN` is explicitly off.
 fn meet_open_enabled() -> bool {
-    matches!(
-        std::env::var("KURO_MEET_OPEN").unwrap_or_default().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
+    match std::env::var("KURO_MEET_OPEN") {
+        Ok(v) => !matches!(v.to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"),
+        Err(_) => true,
+    }
 }
 
-fn open_edge(link: &str) -> bool {
-    if !meet_open_enabled() {
-        // Default off: creating/sending a Meet must not steal focus with a new Edge tab.
-        return false;
+fn open_edge(link: &str) -> Result<bool, &'static str> {
+    if !crate::meet_busy::live_meet_enabled() || !meet_open_enabled() {
+        return Ok(false);
     }
     let Some(edge) = edge_path() else {
-        return false;
+        return Err("missing");
     };
     let args = edge_args(edge.to_string_lossy().as_ref(), link);
-    Command::new(&args[0]).args(&args[1..]).spawn().is_ok()
+    if Command::new(&args[0]).args(&args[1..]).spawn().is_ok() { Ok(true) } else { Err("spawn") }
 }
 
 pub fn run(arguments: &Value) -> String {
     let contact = arguments.get("contact").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    kuro_core::append_rotating_log(
+        &kuro_core::KuroPaths::from_env().log(),
+        &format!("make_meet start contact=`{contact}` live={}", crate::meet_busy::live_meet_enabled()),
+        1_000_000,
+    );
     let mut digits = String::new();
     let mut shown = String::new();
     if !contact.is_empty() {
@@ -165,6 +79,9 @@ pub fn run(arguments: &Value) -> String {
         Some(false) => return "Google Meet is not signed in.".into(),
         Some(true) => return "Success: The Meet is open.".into(),
         None => {}
+    }
+    if !crate::meet_busy::live_meet_enabled() {
+        return "Google Meet is not signed in.".into();
     }
     let token_path = kuro_core::KuroPaths::from_env().google_token();
     if !google_token_usable(&token_path) {
@@ -181,6 +98,37 @@ pub fn run(arguments: &Value) -> String {
     result
 }
 
+/// Open a previously created Meet link. Does not create a space or take create cooldown.
+/// Edge spawn still requires `enable_live_meet` (engine boot).
+pub fn run_join(arguments: &Value) -> String {
+    let contact = arguments.get("contact").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let path = meet_last::store_path();
+    if !contact.is_empty() {
+        let book = crate::whatsapp::address_book();
+        let Some((name, _)) = crate::whatsapp::resolve_contact(&contact, &book) else {
+            return "I don't know that contact.".into();
+        };
+        let shown = crate::whatsapp::spoken_recipient(&name);
+        let Some(link) = meet_last::lookup(&path, &name).or_else(|| meet_last::lookup(&path, &contact)) else {
+            return "I don't have a Meet link for them.".into();
+        };
+        return open_saved_link(&link, Some(&shown));
+    }
+    let Some(link) = meet_last::lookup(&path, "") else {
+        return "I don't have a Meet link for them.".into();
+    };
+    open_saved_link(&link, None)
+}
+
+fn open_saved_link(link: &str, _shown: Option<&str>) -> String {
+    match open_edge(link) {
+        Ok(true) => "Success: The Meet is open.".into(),
+        Ok(false) => format!("Success: Meet ready. {link}"),
+        Err("missing") => "I couldn't find Microsoft Edge.".into(),
+        Err(_) => "I couldn't open that Meet link.".into(),
+    }
+}
+
 fn run_native(token_path: &Path, digits: &str, shown: &str, http: &MeetHttp) -> String {
     let Some(token) = access_token(token_path, http) else {
         return "Google Meet is not signed in.".into();
@@ -188,6 +136,8 @@ fn run_native(token_path: &Path, digits: &str, shown: &str, http: &MeetHttp) -> 
     let Some(link) = create_space(&token, http) else {
         return "I couldn't create that Google Meet.".into();
     };
+
+    meet_last::remember(&meet_last::store_path(), &link, shown);
 
     // Link first so the contact is not waiting on a browser.
     let sent_ok = if digits.is_empty() {
@@ -199,16 +149,18 @@ fn run_native(token_path: &Path, digits: &str, shown: &str, http: &MeetHttp) -> 
         }
     };
 
-    let opened = open_edge(&link);
+    let opened = match open_edge(&link) {
+        Ok(v) => v,
+        Err("missing") if digits.is_empty() => {
+            return "I couldn't find Microsoft Edge.".into();
+        }
+        Err(_) => false,
+    };
     if digits.is_empty() {
         if opened {
             return "Success: The Meet is open.".into();
         }
-        // Default: create only; speak the fact without forcing a tab.
         return format!("Success: Meet ready. {link}");
-    }
-    if sent_ok && opened {
-        return format!("Success: Sent the Meet link to {shown}.");
     }
     if sent_ok {
         return format!("Success: Sent the Meet link to {shown}.");
@@ -227,7 +179,7 @@ mod tests {
     use std::net::TcpListener;
     use std::panic::{AssertUnwindSafe, catch_unwind};
     use std::sync::atomic::Ordering;
-    use std::time::{Duration, Instant};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn busy_released_on_panic() {
@@ -278,5 +230,33 @@ mod tests {
         let start = Instant::now();
         assert!(create_space("test-token", &http).is_none());
         assert!(start.elapsed() < Duration::from_secs(9));
+    }
+
+    #[test]
+    fn join_uses_saved_link_during_create_cooldown() {
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("kuro-meet-join-{stamp}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        unsafe {
+            std::env::set_var("KURO_DATA_DIR", &dir);
+            std::env::set_var("KURO_MEET_OPEN", "0");
+        }
+        meet_last::remember(&dir.join("meet_last.json"), "https://meet.google.com/zzz-yyyy-xxx", "siya");
+        crate::whatsapp::set_address_book(Some([("siya".into(), "910000000001".into())].into_iter().collect()));
+        MEET_BUSY.store(false, Ordering::SeqCst);
+        {
+            let guard = claim_meet().expect("claim");
+            guard.mark_cooldown();
+        }
+        assert!(claim_meet().is_none(), "create path still cooling down");
+        let reply = run_join(&serde_json::json!({"contact": "siya"}));
+        assert!(reply.contains("meet.google.com/zzz-yyyy-xxx") || reply.starts_with("Success:"), "got: {reply}");
+        assert!(!reply.contains("already opening"));
+        crate::whatsapp::set_address_book(None);
+        unsafe {
+            std::env::remove_var("KURO_MEET_OPEN");
+            std::env::remove_var("KURO_DATA_DIR");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

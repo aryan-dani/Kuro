@@ -32,12 +32,22 @@ pub fn looks_like_question(normalized: &str) -> bool {
             || normalized.ends_with("help me out"))
 }
 
+/// JoinMeet must look like join/reopen, not create/start/send.
+pub(crate) fn join_meet_shaped(normalized: &str) -> bool {
+    let t = normalized.trim();
+    t.starts_with("join ")
+        || t.starts_with("reopen ")
+        || (t.starts_with("open ")
+            && (t.contains("sent") || t.contains("earlier") || t.contains("already") || t.contains("that meet")))
+}
+
 pub(crate) fn polarity_ok(intent: Intent, normalized: &str) -> bool {
     let on = ["on", "up", "wake", "start", "enable", "boot"].iter().any(|w| crate::has_word(normalized, w));
     let off = ["off", "down", "kill", "shut", "disable", "sleep"].iter().any(|w| crate::has_word(normalized, w));
     match intent {
         Intent::PowerOn | Intent::DaddyHome => on || !off,
         Intent::PowerOff | Intent::GoodNight => off || !on,
+        Intent::JoinMeet => join_meet_shaped(normalized),
         _ => true,
     }
 }

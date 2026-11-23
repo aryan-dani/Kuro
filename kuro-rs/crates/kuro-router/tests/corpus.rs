@@ -132,6 +132,7 @@ fn install_executor(data_dir: &Path) {
                     format!("Success: Sent the Meet link to {contact}.")
                 }
             }
+            "join_meet" => "Success: The Meet is open.".into(),
             "send_whatsapp" => "Success: Sent.".into(),
             "run_workflow" => "Success: Workflow started.".into(),
             "read_screen" => "Success: Screen says hello.".into(),

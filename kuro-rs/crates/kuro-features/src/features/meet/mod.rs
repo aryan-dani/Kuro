@@ -39,6 +39,10 @@ impl MeetFeature {
         slots.get("contact").and_then(|v| v.as_str()).unwrap_or("").trim()
     }
 
+    fn is_join(slots: &Value) -> bool {
+        slots.get("action").and_then(|v| v.as_str()).unwrap_or("") == "join"
+    }
+
     fn map_error(&self, raw: &str) -> String {
         let low = raw.to_lowercase();
         if low.contains("don't know that contact") {
@@ -49,6 +53,12 @@ impl MeetFeature {
         }
         if low.contains("already opening") {
             return self.reply("busy", "I'm already opening a Meet.");
+        }
+        if low.contains("don't have a meet link") {
+            return self.reply("no_link", "I don't have a Meet link for them.");
+        }
+        if low.contains("couldn't find microsoft edge") {
+            return self.reply("no_edge", "I couldn't find Microsoft Edge.");
         }
         if low.contains("couldn't create") {
             return self.reply("create_failed", "I couldn't create that Google Meet.");
@@ -80,7 +90,9 @@ impl Feature for MeetFeature {
 
     fn execute(&self, _ctx: &FeatureContext<'_>, slots: &Value) -> Result<Outcome, FeatureError> {
         let contact = Self::contact(slots);
-        match self.control.create_meet(contact) {
+        let result =
+            if Self::is_join(slots) { self.control.join_meet(contact) } else { self.control.create_meet(contact) };
+        match result {
             Ok(speech) => Ok(Outcome::say(speech)),
             Err(raw) => Ok(Outcome::say(self.map_error(&raw))),
         }

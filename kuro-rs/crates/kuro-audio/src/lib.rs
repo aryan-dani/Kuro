@@ -17,9 +17,8 @@ pub struct FollowUpListen {
 
 impl Default for FollowUpListen {
     fn default() -> Self {
-        // Long trailing silence so users can pause between words ("okay... open chrome")
-        // without the follow-up mic slamming shut.
-        Self { max_ms: 12_000, silence_ms: 1_600, elapsed_ms: 0, heard_speech: false, quiet_ms: 0 }
+        // Long trailing silence so users can pause mid-sentence without the mic slamming shut.
+        Self { max_ms: 16_000, silence_ms: 3_500, elapsed_ms: 0, heard_speech: false, quiet_ms: 0 }
     }
 }
 

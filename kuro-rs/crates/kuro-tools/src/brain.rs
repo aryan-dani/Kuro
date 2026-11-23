@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-pub const SYSTEM_PROMPT: &str = "You are Kuro, a local Windows voice assistant. Answer in one or two short spoken sentences. No lists, no numbered steps, no stage directions, no asterisks, and no how-to manuals. If a desk, Meet, WhatsApp, inbox, music, or workflow tool should handle it, say so briefly instead of inventing steps.";
+pub const SYSTEM_PROMPT: &str = "You are Kuro, a local Windows voice assistant. Answer in one or two short spoken sentences. No lists, no numbered steps, no stage directions, no asterisks, and no how-to manuals. You cannot send WhatsApp, open Edge, create Google Meet, or run workflows yourself. Never say you sent, opened, joined, or finished those actions. If the user wants that, say the tool did not run and ask them to retry the phrase. Never invent success.";
 
 const WAIT: &str = "Neural engine is off. Please wait while I start it.";
 
@@ -12,7 +12,12 @@ pub struct Brain {
 impl Brain {
     pub fn thread(&mut self, user_text: &str) -> &[Value] {
         if self.messages.is_empty() {
-            self.messages.push(json!({"role": "system", "content": SYSTEM_PROMPT}));
+            let mut system = SYSTEM_PROMPT.to_string();
+            if let Some(meet) = crate::meet_followup::context_blurb() {
+                system.push(' ');
+                system.push_str(&meet);
+            }
+            self.messages.push(json!({"role": "system", "content": system}));
         }
         self.messages.push(json!({"role": "user", "content": user_text}));
         self.trim();
@@ -20,9 +25,23 @@ impl Brain {
     }
 
     pub fn remember(&mut self, reply: &str) -> String {
-        self.messages.push(json!({"role": "assistant", "content": reply}));
+        let safe = crate::honesty::scrub_chat_reply(
+            self.messages
+                .iter()
+                .rev()
+                .find_map(|m| {
+                    if m.get("role").and_then(|r| r.as_str()) == Some("user") {
+                        m.get("content").and_then(|c| c.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(""),
+            reply,
+        );
+        self.messages.push(json!({"role": "assistant", "content": safe.clone()}));
         self.trim();
-        reply.to_string()
+        safe
     }
 
     fn trim(&mut self) {
@@ -96,7 +115,16 @@ pub fn ollama_chat_url() -> String {
 }
 
 pub fn chat(model: &str, messages: &[Value]) -> Result<String, String> {
-    let body = json!({"model": model, "messages": messages, "stream": false}).to_string();
+    let num_ctx: u32 = std::env::var("KURO_OLLAMA_NUM_CTX").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(4096);
+    let body = json!({
+        "model": model,
+        "messages": messages,
+        "stream": false,
+        "think": false,
+        "keep_alive": "30m",
+        "options": { "num_ctx": num_ctx }
+    })
+    .to_string();
     let resp = ureq::post(&ollama_chat_url())
         .timeout(std::time::Duration::from_secs(60))
         .set("Content-Type", "application/json")

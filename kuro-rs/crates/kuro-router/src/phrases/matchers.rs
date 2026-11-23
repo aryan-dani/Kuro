@@ -25,6 +25,7 @@ pub fn matches(text: &str) -> bool {
         || is_news(&t)
         || is_inbox(&t)
         || is_meet(&t)
+        || is_join_meet(&t)
         || is_whatsapp(&t)
         || is_workflow(&t)
         || is_workflow_hint(&t)
@@ -227,6 +228,9 @@ pub fn is_news(t: &str) -> bool {
 pub fn is_meet(t: &str) -> bool {
     kuro_tools::match_registered_phrase(t).is_some_and(|(tool, _)| tool.name == "make_meet")
 }
+pub fn is_join_meet(t: &str) -> bool {
+    kuro_tools::match_registered_phrase(t).is_some_and(|(tool, _)| tool.name == "join_meet")
+}
 pub fn is_whatsapp(t: &str) -> bool {
     kuro_tools::match_registered_phrase(t).is_some_and(|(tool, _)| tool.name == "send_whatsapp")
 }
@@ -245,6 +249,72 @@ pub fn is_hub_desk(t: &str) -> bool {
     is_daddys_home(t) || is_goodnight(t) || is_power_on(t) || is_power_off(t) || is_news(t)
 }
 
+/// Phrase-only intent label. Does not execute tools, speak, or touch the hub.
+pub fn classify_intent(text: &str) -> &'static str {
+    let t = normalize(text);
+    if t.is_empty() {
+        return "none";
+    }
+    if is_stop_music(&t) {
+        return "stop_music";
+    }
+    if is_pause(&t) {
+        return "pause";
+    }
+    if is_resume(&t) {
+        return "resume";
+    }
+    if is_goodnight(&t) {
+        return "goodnight";
+    }
+    if is_daddys_home(&t) {
+        return "daddys_home";
+    }
+    if is_power_off(&t) {
+        return "power_off";
+    }
+    if is_power_on(&t) {
+        return "power_on";
+    }
+    if is_inbox(&t) {
+        return "inbox";
+    }
+    if is_news(&t) {
+        return "news";
+    }
+    if is_join_meet(&t) {
+        return "join_meet";
+    }
+    if is_meet(&t) {
+        return "meet";
+    }
+    if is_whatsapp(&t) {
+        return "whatsapp";
+    }
+    if is_workflow(&t) || is_workflow_hint(&t) {
+        return "workflow";
+    }
+    if is_cancel(&t) {
+        return "cancel";
+    }
+    if is_thanks(&t) {
+        return "thanks";
+    }
+    if is_help(&t) {
+        return "help";
+    }
+    if is_identity(&t) {
+        return "identity";
+    }
+    if is_date(&t) {
+        return "date";
+    }
+    if is_time(&t) {
+        return "time";
+    }
+    "none"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,5 +326,12 @@ mod tests {
         assert!(is_help("hey kuro what can you do"));
         assert!(!is_help("can you help me build an llm"));
         assert!(!is_help("please help me understand borrow checker lifetimes"));
+    }
+
+    #[test]
+    fn classify_desk_on_and_question_negative() {
+        assert_eq!(classify_intent("desk on"), "power_on");
+        assert_eq!(classify_intent("good night"), "goodnight");
+        assert_eq!(classify_intent("why does my monitor turn off when I play games"), "none");
     }
 }

@@ -9,11 +9,23 @@ priority = 25
 id = "meet.create"
 exemplars = ["make a google meet", "create a google meet", "start a meet"]
 
+[[intents]]
+id = "meet.join"
+exemplars = [
+  "join the meet",
+  "join that meet link",
+  "join the google meet you already opened",
+  "reopen the meet link from earlier",
+]
+
 [replies]
 open = "The Meet is open."
 sent = "Sent the Meet link to {contact}."
+joined = "The Meet is open."
 unknown_contact = "I don't know that contact."
 not_signed_in = "Google Meet is not signed in."
 busy = "I'm already opening a Meet."
 create_failed = "I couldn't create that Google Meet."
 send_failed = "I couldn't send that Meet link."
+no_link = "I don't have a Meet link for them."
+no_edge = "I couldn't find Microsoft Edge."

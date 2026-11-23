@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::guards::{conversational_help_suffix, polarity_ok};
+use super::guards::{conversational_help_suffix, join_meet_shaped, polarity_ok};
 use super::similarity::cosine_similarity;
 use super::{Intent, RouteDecision};
 
@@ -54,6 +54,10 @@ pub fn decide_from_matrix(query: &[f32], matrix: &[(Intent, Vec<f32>)], normaliz
         *entry = (*entry).max(s);
     }
     let mut ranked: Vec<(Intent, f32)> = per_intent.into_iter().collect();
+    // Drop JoinMeet when the utterance is create/start/send shaped so MakeMeet can win.
+    if !join_meet_shaped(normalized) {
+        ranked.retain(|(intent, _)| *intent != Intent::JoinMeet);
+    }
     ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     let best_tool = ranked.first().copied();
     let second = ranked.get(1).map(|p| p.1);

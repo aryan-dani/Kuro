@@ -11,7 +11,7 @@ pub fn warm_speech() {
     let _ = kuro_tts::prewarm();
     kuro_tts::prebuild_phrase_cache();
     if ollama_up() {
-        let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "qwen2.5:7b-instruct".into());
+        let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "gemma4:e4b".into());
         kuro_tools::brain::prewarm_model(&model);
     }
 }

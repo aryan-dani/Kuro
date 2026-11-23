@@ -121,3 +121,47 @@ reply = "The Meet is open."
 handled = true
 needs_model = true
 
+[[case]]
+id = "meet-join-plain"
+input = "Join the meet"
+normalized = "join the meet"
+stage = "pattern"
+intent = "JoinMeet"
+tool = "join_meet"
+args = { contact = "" }
+reply = "The Meet is open."
+handled = true
+
+[[case]]
+id = "meet-join-that-link"
+input = "Join that meet link"
+normalized = "join that meet link"
+stage = "pattern"
+intent = "JoinMeet"
+tool = "join_meet"
+args = { contact = "" }
+reply = "The Meet is open."
+handled = true
+
+[[case]]
+id = "meet-join-sent-to-siya"
+input = "Join the google meet link you sent to siya"
+normalized = "join the google meet link you sent to siya"
+stage = "pattern"
+intent = "JoinMeet"
+tool = "join_meet"
+args = { contact = "siya" }
+reply = "The Meet is open."
+handled = true
+
+[[case]]
+id = "meet-open-sent-to-siya"
+input = "Open the meet you sent to siya"
+normalized = "open the meet you sent to siya"
+stage = "pattern"
+intent = "JoinMeet"
+tool = "join_meet"
+args = { contact = "siya" }
+reply = "The Meet is open."
+handled = true
+

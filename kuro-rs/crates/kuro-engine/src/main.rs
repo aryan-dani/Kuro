@@ -22,6 +22,8 @@ fn main() {
     let _wake_triggers = build_wake_registry(&settings);
     let paths = kuro_core::KuroPaths::from_env();
     let _ = std::fs::create_dir_all(&paths.root);
+    // Allow Google Meet create/join only in this process; cargo test leaves it off.
+    kuro_tools::meet::enable_live_meet();
     if !kuro_core::try_singleton(&paths.singleton_lock()) {
         eprintln!("Kuro engine is already running.");
         std::process::exit(0);

@@ -22,11 +22,14 @@ pub(crate) fn say_execute_blocked(text: &str) -> bool {
     if let Some(kuro_router::RouteDecision::Tool(intent)) = kuro_router::route_semantic(&normalized) {
         return matches!(
             intent,
-            kuro_router::Intent::SendWhatsapp | kuro_router::Intent::MakeMeet | kuro_router::Intent::RunWorkflow
+            kuro_router::Intent::SendWhatsapp
+                | kuro_router::Intent::MakeMeet
+                | kuro_router::Intent::JoinMeet
+                | kuro_router::Intent::RunWorkflow
         );
     }
     kuro_tools::match_registered_phrase(text)
-        .is_some_and(|(tool, _)| matches!(tool.name, "send_whatsapp" | "make_meet" | "run_workflow"))
+        .is_some_and(|(tool, _)| matches!(tool.name, "send_whatsapp" | "make_meet" | "join_meet" | "run_workflow"))
 }
 
 pub async fn say(State(state): State<Arc<AppState>>, headers: HeaderMap, body: String) -> impl IntoResponse {

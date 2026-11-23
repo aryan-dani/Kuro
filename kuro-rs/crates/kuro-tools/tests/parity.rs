@@ -314,7 +314,20 @@ fn meet_phrases_and_guards() {
     for (text, name) in samples {
         let found = kuro_tools::meet::match_phrase(text).unwrap_or_else(|| panic!("{text}"));
         assert_eq!(found.get("contact").map(String::as_str), Some(name), "{text}");
+        assert_ne!(found.get("action").map(String::as_str), Some("join"), "{text}");
     }
+    let join_samples =
+        [("join the meet", ""), ("join that meet link", ""), ("join the google meet link you sent to siya", "siya")];
+    for (text, name) in join_samples {
+        let found = kuro_tools::meet::match_phrase(text).unwrap_or_else(|| panic!("{text}"));
+        assert_eq!(found.get("action").map(String::as_str), Some("join"), "{text}");
+        assert_eq!(found.get("contact").map(String::as_str), Some(name), "{text}");
+    }
+    let soft = kuro_tools::meet_followup_match("open the meet you sent to siya").unwrap();
+    assert_eq!(soft.get("action").map(String::as_str), Some("join"));
+    assert_eq!(soft.get("contact").map(String::as_str), Some("siya"));
+    let soft_natural = kuro_tools::meet_followup_match("get me into that google meet you sent up to siya").unwrap();
+    assert_eq!(soft_natural.get("contact").map(String::as_str), Some("siya"));
     assert!(kuro_tools::meet::match_phrase("desk off").is_none());
     assert!(kuro_tools::meet::match_phrase("send the link to mom on whatsapp").is_none());
     assert!(kuro_tools::meet::match_phrase(

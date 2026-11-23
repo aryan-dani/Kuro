@@ -26,7 +26,8 @@ fn follow_up_stops_on_epoch_loss_silence_and_cap() {
     assert!(mic.tick(0.0, 400, true));
     assert!(mic.tick(0.1, 100, true));
     assert!(mic.tick(0.0, 1_000, true), "1s pause after speech must stay open");
-    assert!(!mic.tick(0.0, 700, true), "default trailing silence ends listen");
+    assert!(mic.tick(0.0, 2_000, true), "3s pause after speech must stay open");
+    assert!(!mic.tick(0.0, 600, true), "default trailing silence ends listen");
     let mut mic = FollowUpListen::default();
     assert!(!mic.tick(0.2, 100, false));
     let mut mic = FollowUpListen { max_ms: 1000, ..FollowUpListen::default() };

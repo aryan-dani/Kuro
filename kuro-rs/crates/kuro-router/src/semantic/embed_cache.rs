@@ -113,6 +113,7 @@ fn intent_tag(intent: Intent) -> u32 {
         Intent::RunWorkflow => 17,
         Intent::ReadScreen => 18,
         Intent::ConversationalLlm => 19,
+        Intent::JoinMeet => 20,
     }
 }
 
@@ -138,6 +139,7 @@ fn intent_from_tag(tag: u32) -> Option<Intent> {
         17 => Intent::RunWorkflow,
         18 => Intent::ReadScreen,
         19 => Intent::ConversationalLlm,
+        20 => Intent::JoinMeet,
         _ => return None,
     })
 }

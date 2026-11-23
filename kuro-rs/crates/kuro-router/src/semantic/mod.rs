@@ -29,6 +29,7 @@ pub enum Intent {
     PowerOn,
     GetNews,
     MakeMeet,
+    JoinMeet,
     CheckInbox,
     SendWhatsapp,
     RunWorkflow,

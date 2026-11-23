@@ -61,7 +61,14 @@ pub(crate) fn try_agent_route(
     turn_id: u64,
     plan_id: u64,
 ) -> Option<AgentRoute> {
-    if try_handle(text).is_some() || llm_mode == "off" || !routed.reply.is_empty() || !routed.start_ollama {
+    if try_handle(text).is_some() {
+        return None;
+    }
+    // Hybrid: soft Meet follow-ups work even when the full agent loop is off.
+    if let Some(follow) = crate::meet_followup_route::try_soft_meet_followup(text, routed.skip_tts) {
+        return Some(follow);
+    }
+    if llm_mode == "off" || !routed.reply.is_empty() || !routed.start_ollama {
         return None;
     }
     let ctx = FeatureContext::new(&hook.clock);
@@ -70,7 +77,7 @@ pub(crate) fn try_agent_route(
         return Some(AgentRoute::Confirm(pending));
     }
     if !result.speeches.is_empty() {
-        let reply = result.speeches.join(" ");
+        let reply = kuro_tools::honesty::scrub_chat_reply(text, &result.speeches.join(" "));
         return Some(AgentRoute::Reply(reply, routed.skip_tts));
     }
     None

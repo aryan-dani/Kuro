@@ -347,23 +347,38 @@ where
     if !live() {
         return Ok(());
     }
-    let (stream, handle) = rodio::OutputStream::try_default().map_err(|err| err.to_string())?;
-    let sink = rodio::Sink::try_new(&handle).map_err(|err| err.to_string())?;
-    let source = rodio::buffer::SamplesBuffer::new(1, 22_050, pcm.to_vec());
-    if !live() {
-        return Ok(());
-    }
-    sink.append(source);
-    on_audio_start();
-    while !sink.empty() {
+    // Meet / browser exclusive mode can steal the device briefly; retry shared open.
+    let mut last_err = String::new();
+    for attempt in 0..4 {
         if !live() {
-            sink.stop();
-            break;
+            return Err("turn cancelled before play".into());
         }
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        match rodio::OutputStream::try_default() {
+            Ok((stream, handle)) => {
+                let sink = rodio::Sink::try_new(&handle).map_err(|err| err.to_string())?;
+                let source = rodio::buffer::SamplesBuffer::new(1, 22_050, pcm.to_vec());
+                if !live() {
+                    return Err("turn cancelled before play".into());
+                }
+                sink.append(source);
+                on_audio_start();
+                while !sink.empty() {
+                    if !live() {
+                        sink.stop();
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                drop(stream);
+                return Ok(());
+            }
+            Err(err) => {
+                last_err = err.to_string();
+                std::thread::sleep(std::time::Duration::from_millis(80 + attempt * 40));
+            }
+        }
     }
-    drop(stream);
-    Ok(())
+    Err(format!("audio output unavailable: {last_err}"))
 }
 
 pub fn play_pcm(pcm: &[f32]) -> Result<(), String> {

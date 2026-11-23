@@ -75,6 +75,11 @@ impl MeetControl for ToolsMeetControl {
         let raw = kuro_tools::execute_tool("make_meet", &json!({ "contact": contact }));
         map_tool_speech(&raw)
     }
+
+    fn join_meet(&self, contact: &str) -> Result<String, String> {
+        let raw = kuro_tools::execute_tool("join_meet", &json!({ "contact": contact }));
+        map_tool_speech(&raw)
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -96,6 +101,16 @@ pub(crate) fn meet_reply(t: &str) -> String {
     let feature = MeetFeature::with_control(Arc::new(ToolsMeetControl));
     let live = execute_feature_speech(&feature, &args);
     merge_optional_reply("MakeMeet", live, &args)
+}
+
+pub(crate) fn join_meet_reply(t: &str) -> String {
+    let args = kuro_tools::match_registered_phrase(t)
+        .filter(|(tool, _)| tool.name == "join_meet")
+        .map(|(_, args)| args)
+        .unwrap_or_else(|| json!({ "contact": "", "action": "join" }));
+    let feature = MeetFeature::with_control(Arc::new(ToolsMeetControl));
+    let live = execute_feature_speech(&feature, &args);
+    merge_optional_reply("JoinMeet", live, &args)
 }
 
 pub(crate) fn whatsapp_reply(t: &str) -> String {
@@ -229,6 +244,21 @@ mod tests {
         })));
         assert_eq!(meet_reply("make a google meet"), "The Meet is open.");
         assert_eq!(meet_reply("send a google meet link to mom"), "Sent the Meet link to mom.");
+        kuro_tools::set_executor(None);
+    }
+
+    #[test]
+    fn join_meet_reply_uses_join_tool() {
+        let recorded: Arc<Mutex<Vec<(String, Value)>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&recorded);
+        kuro_tools::set_executor(Some(Box::new(move |name, args| {
+            sink.lock().unwrap().push((name.to_string(), args.clone()));
+            "Success: The Meet is open.".into()
+        })));
+        assert_eq!(join_meet_reply("join that meet link"), "The Meet is open.");
+        let calls = recorded.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "join_meet");
         kuro_tools::set_executor(None);
     }
 

@@ -3,9 +3,21 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) static MEET_BUSY: AtomicBool = AtomicBool::new(false);
 
+/// Live Google/Edge Meet actuation. Off until the engine process enables it so
+/// `cargo test` / gate never create a real Meet or open Edge on the desk.
+static LIVE_MEET: AtomicBool = AtomicBool::new(false);
+
 /// Unix seconds until a new Meet may start (cooldown after a claim).
 static MEET_COOLDOWN_UNTIL: AtomicU64 = AtomicU64::new(0);
 const MEET_COOLDOWN_SECS: u64 = 45;
+
+pub(crate) fn enable_live_meet() {
+    LIVE_MEET.store(true, Ordering::SeqCst);
+}
+
+pub(crate) fn live_meet_enabled() -> bool {
+    LIVE_MEET.load(Ordering::SeqCst)
+}
 
 pub(crate) struct MeetBusyGuard {
     cool: std::cell::Cell<bool>,

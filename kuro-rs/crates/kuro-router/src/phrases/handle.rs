@@ -5,12 +5,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::Local;
 use serde_json::json;
 
-use crate::adapters::{desk_scene_reply, meet_reply, music_op_reply, whatsapp_reply};
+use crate::adapters::{desk_scene_reply, join_meet_reply, meet_reply, music_op_reply, whatsapp_reply};
 
 use super::PhraseResult;
 use super::matchers::{
-    is_cancel, is_daddys_home, is_date, is_goodnight, is_help, is_identity, is_inbox, is_meet, is_news, is_pause,
-    is_power_off, is_power_on, is_resume, is_stop_music, is_thanks, is_time, is_whatsapp, is_workflow,
+    is_cancel, is_daddys_home, is_date, is_goodnight, is_help, is_identity, is_inbox, is_join_meet, is_meet, is_news,
+    is_pause, is_power_off, is_power_on, is_resume, is_stop_music, is_thanks, is_time, is_whatsapp, is_workflow,
     is_workflow_hint,
 };
 
@@ -96,7 +96,20 @@ fn execute_intent(intent: crate::semantic::Intent, t: &str) -> Option<PhraseResu
             let raw = kuro_tools::execute_tool("get_news", &json!({"topic": topic}));
             fast(news_to_speech(&raw))
         }
-        Intent::MakeMeet => fast(meet_reply(t)),
+        Intent::MakeMeet => {
+            // Phrase match required so semantic near-misses never create a live Meet.
+            if is_join_meet(t) {
+                fast(join_meet_reply(t))
+            } else if is_meet(t) {
+                fast(meet_reply(t))
+            } else {
+                return None;
+            }
+        }
+        Intent::JoinMeet => {
+            // Never create from JoinMeet. Create cooldown must not block a join.
+            if is_whatsapp(t) { fast(whatsapp_reply(t)) } else { fast(join_meet_reply(t)) }
+        }
         Intent::CheckInbox => {
             let mode = inbox_mode(t);
             let raw = kuro_tools::execute_tool("check_inbox", &json!({"mode": mode}));
@@ -164,6 +177,9 @@ fn legacy_try_handle(t: &str) -> Option<PhraseResult> {
         let topic = news_topic(t);
         let raw = kuro_tools::execute_tool("get_news", &json!({"topic": topic}));
         return Some(fast(news_to_speech(&raw)));
+    }
+    if is_join_meet(t) {
+        return Some(fast(join_meet_reply(t)));
     }
     if is_meet(t) {
         return Some(fast(meet_reply(t)));

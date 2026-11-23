@@ -3,10 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use fancy_regex::Regex;
-use kuro_core::get_close_matches;
 use serde_json::Value;
 
-const CUTOFF: f64 = 0.86;
 const FILLERS: &[&str] = &["please", "hey", "kuro", "can", "you", "could", "would", "just", "kindly"];
 const IMAGE_FORMATS: &[i32] = &[2, 8, 17, 15];
 
@@ -190,86 +188,8 @@ pub fn address_book() -> HashMap<String, String> {
     book
 }
 
-fn edit_distance(a: &str, b: &str) -> usize {
-    if a.len().abs_diff(b.len()) > 1 {
-        return 2;
-    }
-    if a.len() == b.len() {
-        return a.bytes().zip(b.bytes()).filter(|(x, y)| x != y).count();
-    }
-    let (longer, shorter) = if a.len() > b.len() { (a, b) } else { (b, a) };
-    let lb = longer.as_bytes();
-    let sb = shorter.as_bytes();
-    let mut i = 0;
-    let mut j = 0;
-    let mut skipped = 0;
-    while i < lb.len() && j < sb.len() {
-        if lb[i] != sb[j] {
-            skipped += 1;
-            if skipped > 1 {
-                return 2;
-            }
-            i += 1;
-            continue;
-        }
-        i += 1;
-        j += 1;
-    }
-    1
-}
-
-fn shared_prefix(a: &str, b: &str) -> usize {
-    a.bytes().zip(b.bytes()).take_while(|(x, y)| x == y).count()
-}
-
-fn one_letter_miss(query_n: &str, book: &HashMap<String, String>) -> Option<(String, String)> {
-    let mut found: HashMap<String, (String, String)> = HashMap::new();
-    for (name, digits) in book {
-        let key = normalize(name);
-        if !key.is_empty() && edit_distance(query_n, &key) == 1 {
-            found.entry(key).or_insert_with(|| (name.clone(), digits.clone()));
-        }
-    }
-    if found.is_empty() {
-        return None;
-    }
-    if found.len() == 1 {
-        return found.into_values().next();
-    }
-    let mut ranked: Vec<(String, (String, String))> = found.into_iter().collect();
-    ranked.sort_by_key(|pair| std::cmp::Reverse(shared_prefix(query_n, &pair.0)));
-    let best_n = shared_prefix(query_n, &ranked[0].0);
-    let next_n = shared_prefix(query_n, &ranked[1].0);
-    if best_n >= 2 && best_n > next_n {
-        return Some(ranked.remove(0).1);
-    }
-    None
-}
-
 pub fn resolve_contact(query: &str, book: &HashMap<String, String>) -> Option<(String, String)> {
-    let query_n = normalize(query);
-    if query_n.is_empty() || book.is_empty() {
-        return None;
-    }
-    for (name, digits) in book {
-        if normalize(name) == query_n {
-            return Some((name.clone(), digits.clone()));
-        }
-    }
-    let choices: Vec<&str> = book.keys().map(|s| s.as_str()).collect();
-    if let Some(hit) = get_close_matches(query, &choices, 1, CUTOFF).into_iter().next() {
-        return book.get(hit).map(|d| (hit.to_string(), d.clone()));
-    }
-    let norms: Vec<String> = choices.iter().map(|n| normalize(n)).collect();
-    let refs: Vec<&str> = norms.iter().map(|s| s.as_str()).collect();
-    if let Some(hit) = get_close_matches(&query_n, &refs, 1, CUTOFF).into_iter().next() {
-        for (name, digits) in book {
-            if normalize(name) == hit {
-                return Some((name.clone(), digits.clone()));
-            }
-        }
-    }
-    one_letter_miss(&query_n, book)
+    crate::contact_bias::resolve_contact(query, book)
 }
 
 fn strip_fillers(text: &str) -> String {

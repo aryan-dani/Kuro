@@ -43,6 +43,9 @@ impl KuroPaths {
     pub fn google_token(&self) -> PathBuf {
         self.root.join("google").join("token.json")
     }
+    pub fn meet_last(&self) -> PathBuf {
+        self.join("meet_last.json")
+    }
     pub fn heartbeat(&self) -> PathBuf {
         self.join("heartbeat.txt")
     }
