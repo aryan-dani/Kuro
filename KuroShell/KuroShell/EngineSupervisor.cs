@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using KuroShell.Core;
 using KuroShell.Core.Supervisor;
 
 namespace KuroShell;
@@ -141,31 +142,45 @@ public sealed class EngineSupervisor
     public static string? FindEngine(string? repoRoot)
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var candidates = new List<string>(3);
-        if (!string.IsNullOrWhiteSpace(repoRoot))
+        // Prefer the newest binary so a locked stale release does not beat a fresh debug or LocalAppData copy.
+        return EngineLocate.PreferNewest(EngineLocate.CandidatePaths(repoRoot, local));
+    }
+
+    private static void AddCudaRuntime(ProcessStartInfo info)
+    {
+        var root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "NVIDIA GPU Computing Toolkit",
+            "CUDA");
+        if (!Directory.Exists(root))
         {
-            candidates.Add(Path.Combine(repoRoot, "kuro-rs", "target", "release", "kuro-engine.exe"));
+            return;
         }
 
-        candidates.Add(Path.Combine(local, "Kuro", "kuro-engine.exe"));
-        if (!string.IsNullOrWhiteSpace(repoRoot))
+        string? bin = null;
+        foreach (var dir in Directory.GetDirectories(root, "v*"))
         {
-            candidates.Add(Path.Combine(repoRoot, "kuro-rs", "target", "debug", "kuro-engine.exe"));
-        }
-
-        foreach (var candidate in candidates)
-        {
-            if (File.Exists(candidate))
+            var candidate = Path.Combine(dir, "bin", "x64");
+            if (Directory.Exists(candidate) && (bin is null || string.Compare(candidate, bin, StringComparison.OrdinalIgnoreCase) > 0))
             {
-                return candidate;
+                bin = candidate;
             }
         }
 
-        return null;
+        if (bin is null)
+        {
+            return;
+        }
+
+        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+        info.Environment["PATH"] = bin + Path.PathSeparator + path;
+        info.Environment["KURO_STT_BACKEND"] = "cuda";
     }
 
     private void Launch()
     {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        _ = EngineLocate.TryApplyPending(local);
         var engine = FindEngine(RepoRoot);
         if (engine is null)
         {
@@ -218,13 +233,14 @@ public sealed class EngineSupervisor
         info.Environment["KURO_HUD_SHOW_TEXT"] = "1";
         info.Environment["KURO_TTS_PLAY"] = "1";
         info.Environment["KURO_STT_BACKEND"] = "cpu";
+        AddCudaRuntime(info);
         if (RepoRoot is not null)
         {
             info.Environment["KURO_ROOT"] = RepoRoot;
         }
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OLLAMA_MODEL")))
         {
-            info.Environment["OLLAMA_MODEL"] = "qwen2.5:7b-instruct";
+            info.Environment["OLLAMA_MODEL"] = "gemma4:e4b";
         }
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("LIBCLANG_PATH")))
         {

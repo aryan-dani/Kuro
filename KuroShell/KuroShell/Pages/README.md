@@ -21,8 +21,8 @@ id is new.
 
 | Id | Folder | Notes |
 |----|--------|-------|
-| Settings | `Settings/` | Schema-driven settings host (stub) |
-| Health | `Health/` | Doctor summary (stub, phase 26) |
-| Phrases | `Phrases/` | Searchable phrase list (stub, phase 26) |
+| Settings | `Settings/` | Pause, HUD text, restart actions |
+| Health | `Health/` | API, pause, router, voice status |
+| Phrases | `Phrases/` | Searchable phrases with Try (safe only) |
 
 Unknown ids throw `PageNotFoundException` with the list of known page names.

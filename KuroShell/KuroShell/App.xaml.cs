@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using H.NotifyIcon;
+using KuroShell.Core;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -15,6 +18,8 @@ public partial class App : Application, IDisposable
     public static EngineSupervisor Supervisor { get; } = new();
     public static HudWindow Hud { get; private set; } = null!;
     public static MainWindow? Home { get; private set; }
+    public static DispatcherQueue? UiQueue { get; private set; }
+    public static event Action<string>? ShellStateChanged;
 
     public App()
     {
@@ -23,11 +28,18 @@ public partial class App : Application, IDisposable
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        UiQueue = DispatcherQueue.GetForCurrentThread();
         Supervisor.StartOrAttach();
         _client = new EngineClient(Supervisor.Token, tokenPath: EngineSupervisor.TokenFilePath());
+        EnsurePublishedShell();
+        var argv = Environment.GetCommandLineArgs().Skip(1).ToArray();
+        if (ShellLaunch.ShouldOpenHome(argv))
+        {
+            // Main window first so Start Menu / Restart show the app, not only the HUD.
+            _ = OpenHome();
+        }
+
         Hud = new HudWindow();
-        Hud.ShowIdleDot = true;
-        Hud.ShowState("idle");
         _ = HandshakeOnce();
         Hud.DismissRequested = () =>
         {
@@ -44,6 +56,8 @@ public partial class App : Application, IDisposable
         _ = Listen(_events.Token);
     }
 
+    public Task OpenHome() => Open("Conversation");
+
     private void BuildTray()
     {
         var menu = new MenuFlyout();
@@ -52,6 +66,7 @@ public partial class App : Application, IDisposable
         menu.Items.Add(Item("Voice", () => _ = Open("Voice")));
         menu.Items.Add(Item("Logs folder", () => _ = Open("System")));
         menu.Items.Add(Item("Restart engine", () => Task.Run(Supervisor.Restart)));
+        menu.Items.Add(Item("Restart Kuro", () => _ = RestartKuro()));
         menu.Items.Add(Item("Quit", () => _ = Quit()));
         try
         {
@@ -88,6 +103,15 @@ public partial class App : Application, IDisposable
         {
             Home = new MainWindow(_client);
             Home.Closed += (_, _) => Home = null;
+        }
+
+        try
+        {
+            Home.AppWindow.Show();
+        }
+        catch (Exception)
+        {
+            // Activate below still brings the frame forward on most builds.
         }
 
         Home.Activate();
@@ -173,6 +197,7 @@ public partial class App : Application, IDisposable
             ConversationLog.Observe(you, kuro);
             Hud.ShowState(state, label);
             SetTray(state);
+            ShellStateChanged?.Invoke(state);
         }
         catch (Exception)
         {
@@ -213,6 +238,44 @@ public partial class App : Application, IDisposable
         {
             _trayState = "";
         }
+    }
+
+    public Task RequestRestartKuro() => RestartKuro();
+
+    private static void EnsurePublishedShell()
+    {
+        _ = ShellPublish.TryPublishFrom(AppContext.BaseDirectory);
+        var exe = StartMenuShortcut.PreferredTargetExe();
+        if (!string.IsNullOrWhiteSpace(exe) && File.Exists(exe))
+        {
+            _ = StartMenuInstall.EnsureInstalled(exe);
+        }
+    }
+
+    private async Task RestartKuro()
+    {
+        if (_client is not null)
+        {
+            await Supervisor.StopEngine(_client);
+        }
+
+        EnsurePublishedShell();
+        var exe = ShellPublish.PreferredExePath();
+        if (!string.IsNullOrWhiteSpace(exe))
+        {
+            try
+            {
+                Process.Start(AppRestart.DelayedRelaunch(exe));
+            }
+            catch (Exception)
+            {
+                // Fall through to exit; user can start Kuro from the tray script or Start menu.
+            }
+        }
+
+        _events?.Cancel();
+        Dispose();
+        Exit();
     }
 
     private async Task Quit()

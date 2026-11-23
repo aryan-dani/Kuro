@@ -204,7 +204,7 @@ public sealed class HudWindow : Window, IDisposable
         _native.BottomInset = CapsuleBottomInset;
         _native.SetMode(_state);
         _native.SetCaption(Readable(next, label));
-        if (_state == "hidden" && !_showIdleDot)
+        if (!KuroShell.Core.HudShowPolicy.CapsuleVisible(_state, _showIdleDot))
         {
             if (!wasShown)
             {

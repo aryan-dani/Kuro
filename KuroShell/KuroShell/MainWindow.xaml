@@ -2,12 +2,28 @@
     x:Class="KuroShell.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:KuroShell"
     Title="Kuro">
     <Grid x:Name="Root" Background="#F5F4EE" RequestedTheme="Light">
         <Grid.Resources>
+            <Style x:Key="ThinScrollBar" TargetType="ScrollBar">
+                <Setter Property="Width" Value="6" />
+                <Setter Property="MinWidth" Value="6" />
+                <Setter Property="Opacity" Value="0.55" />
+            </Style>
+            <Style x:Key="ThinScrollViewer" TargetType="ScrollViewer">
+                <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+                <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+                <Setter Property="VerticalScrollMode" Value="Enabled" />
+                <Setter Property="HorizontalScrollMode" Value="Disabled" />
+                <Setter Property="IsTabStop" Value="False" />
+                <Setter Property="ZoomMode" Value="Disabled" />
+                <Setter Property="Padding" Value="0,0,4,0" />
+            </Style>
             <Style x:Key="NavButton" TargetType="Button">
                 <Setter Property="Background" Value="Transparent" />
-                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="BorderThickness" Value="3,0,0,0" />
+                <Setter Property="BorderBrush" Value="Transparent" />
                 <Setter Property="HorizontalAlignment" Value="Stretch" />
                 <Setter Property="HorizontalContentAlignment" Value="Left" />
                 <Setter Property="Padding" Value="14,10" />
@@ -19,9 +35,9 @@
             </Style>
             <Style x:Key="QuietButton" TargetType="Button">
                 <Setter Property="Background" Value="#FFFFFF" />
-                <Setter Property="BorderBrush" Value="#141414" />
+                <Setter Property="BorderBrush" Value="#E4E2D8" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="CornerRadius" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="Padding" Value="14,8" />
                 <Setter Property="FontFamily" Value="Assets/Fonts/SpaceGrotesk-Regular.ttf#Space Grotesk" />
                 <Setter Property="FontSize" Value="14" />
@@ -54,19 +70,24 @@
             </Style>
             <Style x:Key="Card" TargetType="Border">
                 <Setter Property="Background" Value="#FFFFFF" />
-                <Setter Property="BorderBrush" Value="#141414" />
+                <Setter Property="BorderBrush" Value="#E4E2D8" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="CornerRadius" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="Padding" Value="20,4,20,4" />
                 <Setter Property="Margin" Value="0,16,0,0" />
             </Style>
             <Style x:Key="Field" TargetType="TextBox">
                 <Setter Property="FontFamily" Value="Assets/Fonts/SpaceGrotesk-Regular.ttf#Space Grotesk" />
                 <Setter Property="FontSize" Value="14" />
-                <Setter Property="CornerRadius" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="Padding" Value="12,8" />
                 <Setter Property="Margin" Value="0,8,0,0" />
             </Style>
+            <Style TargetType="FontIcon">
+                <Setter Property="Foreground" Value="#141414" />
+                <Setter Property="FontSize" Value="16" />
+            </Style>
+            <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinScrollBar}" />
         </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
@@ -78,7 +99,7 @@
                 <ColumnDefinition Width="232" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Border Background="#F5F4EE" BorderBrush="#141414" BorderThickness="0,0,1,0" Padding="16,8,16,24">
+            <Border Background="#F5F4EE" BorderBrush="#E4E2D8" BorderThickness="0,0,1,0" Padding="16,8,16,24">
                 <StackPanel>
                     <TextBlock Text="Kuro" FontFamily="Assets/Fonts/SpaceGrotesk-Bold.ttf#Space Grotesk" FontSize="22" FontWeight="Normal" Foreground="#141414" Margin="14,8,0,28" />
                     <Button x:Name="NavConversation" Tag="Conversation" Style="{StaticResource NavButton}" Click="OnNav">
@@ -142,18 +163,31 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid>
-                        <TextBlock Text="Conversation" Style="{StaticResource PageTitle}" />
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <TextBlock Text="Conversation" Style="{StaticResource PageTitle}" VerticalAlignment="Center" />
+                            <Border x:Name="StateChip" Background="#E4E2D8" CornerRadius="8" Padding="10,4" VerticalAlignment="Center">
+                                <TextBlock x:Name="StateChipText" Text="idle" Style="{StaticResource MetaText}" CharacterSpacing="0" />
+                            </Border>
+                        </StackPanel>
                         <Button Content="New conversation" Style="{StaticResource QuietButton}" HorizontalAlignment="Right" VerticalAlignment="Center" Click="OnNewConversation" />
                     </Grid>
-                    <TextBlock x:Name="EmptyState" Grid.Row="1" Text="Hold Ctrl+Alt+Space." Style="{StaticResource BodyText}" Foreground="#52514E" Margin="0,28,0,0" />
-                    <ScrollViewer x:Name="ThreadScroll" Grid.Row="2" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="EmptyState" Grid.Row="1" Text="Hold Ctrl+Alt+Space, or type below." Style="{StaticResource BodyText}" Foreground="#52514E" Margin="0,20,0,0" />
+                    <StackPanel x:Name="EmptyChips" Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+                        <Button Content="What time is it" Style="{StaticResource QuietButton}" Tag="What time is it" Click="OnEmptyChip" />
+                        <Button Content="What's the news" Style="{StaticResource QuietButton}" Tag="What's the news" Click="OnEmptyChip" />
+                        <Button Content="Help" Style="{StaticResource QuietButton}" Tag="Help" Click="OnEmptyChip" />
+                    </StackPanel>
+                    <ScrollViewer x:Name="ThreadScroll" Grid.Row="3" Margin="0,16,0,0" Style="{StaticResource ThinScrollViewer}">
                         <StackPanel x:Name="ThreadList" Spacing="12" />
                     </ScrollViewer>
+                    <local:ConversationComposer x:Name="Composer" Grid.Row="4" Margin="0,16,0,0" />
                 </Grid>
-                <ScrollViewer x:Name="VoicePage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="VoicePage" Visibility="Collapsed" Style="{StaticResource ThinScrollViewer}">
                     <StackPanel>
                         <TextBlock Text="Voice" Style="{StaticResource PageTitle}" />
                         <TextBlock Text="How Kuro listens and speaks." Style="{StaticResource MetaText}" Margin="0,8,0,0" />
@@ -162,16 +196,20 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
-                <ScrollViewer x:Name="DevicesPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="DevicesPage" Visibility="Collapsed" Style="{StaticResource ThinScrollViewer}">
                     <StackPanel>
                         <TextBlock Text="Devices" Style="{StaticResource PageTitle}" />
                         <TextBlock Text="What this machine can reach." Style="{StaticResource MetaText}" Margin="0,8,0,0" />
                         <Border Style="{StaticResource Card}">
                             <StackPanel x:Name="DeviceRows" />
                         </Border>
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,16,0,0">
+                            <Button Content="Desk on" Style="{StaticResource QuietButton}" Click="OnDeskOn" />
+                            <Button Content="Desk off" Style="{StaticResource QuietButton}" Click="OnDeskOff" />
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
-                <ScrollViewer x:Name="ContactsPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="ContactsPage" Visibility="Collapsed" Style="{StaticResource ThinScrollViewer}">
                     <StackPanel>
                         <TextBlock Text="Contacts" Style="{StaticResource PageTitle}" />
                         <TextBlock Text="Numbers stay masked." Style="{StaticResource MetaText}" Margin="0,8,0,0" />
@@ -185,42 +223,30 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
-                <ScrollViewer x:Name="SystemPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="SystemPage" Visibility="Collapsed" Style="{StaticResource ThinScrollViewer}">
                     <StackPanel>
                         <TextBlock Text="System" Style="{StaticResource PageTitle}" />
-                        <TextBlock Text="Listening, logs, and the engine." Style="{StaticResource MetaText}" Margin="0,8,0,0" />
+                        <TextBlock Text="Logs, router, and timing." Style="{StaticResource MetaText}" Margin="0,8,0,0" />
                         <Border Style="{StaticResource Card}">
                             <StackPanel>
-                                <Grid Padding="0,14">
-                                    <StackPanel>
-                                        <TextBlock Text="Pause listening" Style="{StaticResource SectionLabel}" />
-                                        <TextBlock Text="The hotkey stays quiet until you resume." Style="{StaticResource MetaText}" Margin="0,4,0,0" />
-                                    </StackPanel>
-                                    <ToggleSwitch x:Name="PauseToggle" HorizontalAlignment="Right" OnContent="" OffContent="" Toggled="OnPauseToggled" />
-                                </Grid>
-                                <Border BorderBrush="#141414" BorderThickness="0,1,0,0" Padding="0,14">
+                                <Border BorderBrush="#E4E2D8" BorderThickness="0,0,0,0" Padding="0,14">
                                     <StackPanel>
                                         <TextBlock Text="Logs" Style="{StaticResource SectionLabel}" />
                                         <TextBlock x:Name="LogPath" Style="{StaticResource MetaText}" Margin="0,6,0,0" TextWrapping="Wrap" />
                                         <Button Content="Open logs" Style="{StaticResource QuietButton}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnOpenLogs" />
                                     </StackPanel>
                                 </Border>
-                                <Border BorderBrush="#141414" BorderThickness="0,1,0,0" Padding="0,14">
+                                <Border BorderBrush="#E4E2D8" BorderThickness="0,1,0,0" Padding="0,14">
                                     <Grid>
                                         <TextBlock Text="Router mode" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" />
                                         <TextBlock x:Name="RouterModeText" Style="{StaticResource MetaText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                     </Grid>
                                 </Border>
-                                <Border BorderBrush="#141414" BorderThickness="0,1,0,0" Padding="0,14">
+                                <Border BorderBrush="#E4E2D8" BorderThickness="0,1,0,0" Padding="0,14">
                                     <Grid>
                                         <TextBlock Text="Active voice" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" />
                                         <TextBlock x:Name="TtsActiveText" Style="{StaticResource MetaText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                     </Grid>
-                                </Border>
-                                <Border BorderBrush="#141414" BorderThickness="0,1,0,0" Padding="0,14">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Button Content="Restart engine" Style="{StaticResource QuietButton}" Click="OnRestart" />
-                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                         </Border>
@@ -231,10 +257,6 @@
                         <TextBlock Text="Performance" Style="{StaticResource SectionLabel}" Margin="0,28,0,0" />
                         <Border Style="{StaticResource Card}">
                             <StackPanel x:Name="TimingRows" />
-                        </Border>
-                        <TextBlock Text="Capsule preview" Style="{StaticResource SectionLabel}" Margin="0,28,0,0" />
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel x:Name="Playground" Margin="0,12,0,12" />
                         </Border>
                     </StackPanel>
                 </ScrollViewer>

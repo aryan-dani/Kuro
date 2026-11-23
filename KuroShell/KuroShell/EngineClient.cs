@@ -127,6 +127,48 @@ public sealed class EngineClient : IDisposable
         return false;
     }
 
+    public async Task<SayResult> SayAsync(string json, CancellationToken cancel = default)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(Base, "/say"));
+            request.Headers.TryAddWithoutValidation("X-Kuro-Token", _token);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var response = await _http.SendAsync(request, cancel);
+            if (response.StatusCode == HttpStatusCode.Unauthorized && TryRereadToken(attempt))
+            {
+                continue;
+            }
+
+            var status = (int)response.StatusCode;
+            var text = await response.Content.ReadAsStringAsync(cancel);
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                return new SayResult(ok: false, status, matched: false, reply: "");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new SayResult(ok: false, status, matched: false, reply: "");
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(text);
+                var root = doc.RootElement;
+                var matched = root.TryGetProperty("matched", out var m) && m.ValueKind == JsonValueKind.True;
+                var reply = root.TryGetProperty("reply", out var r) ? r.GetString() ?? "" : "";
+                return new SayResult(ok: true, status, matched, reply);
+            }
+            catch (JsonException)
+            {
+                return new SayResult(ok: false, status, matched: false, reply: "");
+            }
+        }
+
+        return new SayResult(ok: false, status: 0, matched: false, reply: "");
+    }
+
     public async Task ListenAsync(Action<string> onFrame, CancellationToken cancel)
     {
         try

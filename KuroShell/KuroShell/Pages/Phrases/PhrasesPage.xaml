@@ -2,5 +2,23 @@
     x:Class="KuroShell.Pages.Phrases.PhrasesPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <TextBlock Text="Phrases (stub)" />
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="Phrases" FontFamily="ms-appx:///Assets/Fonts/SpaceGrotesk-Bold.ttf#Space Grotesk" FontSize="28" Foreground="#141414" />
+        <TextBlock x:Name="StatusNote" Grid.Row="1" Margin="0,8,0,0"
+                   FontFamily="ms-appx:///Assets/Fonts/JetBrainsMono-Regular.ttf#JetBrains Mono"
+                   FontSize="12" Foreground="#52514E" Text="" />
+        <TextBox x:Name="SearchBox" Grid.Row="2" Margin="0,16,0,12" PlaceholderText="Search phrases"
+                 FontFamily="ms-appx:///Assets/Fonts/SpaceGrotesk-Regular.ttf#Space Grotesk" FontSize="14"
+                 CornerRadius="8"
+                 TextChanged="OnSearchChanged" />
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+            <StackPanel x:Name="PhraseList" />
+        </ScrollViewer>
+    </Grid>
 </UserControl>

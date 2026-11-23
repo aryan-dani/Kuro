@@ -7,14 +7,7 @@ public static class PageRegistry
 {
     private static readonly PageCatalog Catalog = PageCatalog.CreateDefault();
 
-    private static readonly Dictionary<string, Func<UserControl>> Factories = new(StringComparer.Ordinal)
-    {
-        [PageIds.Settings] = static () => new Settings.SettingsPage(),
-        [PageIds.Health] = static () => new Health.HealthPage(),
-        [PageIds.Phrases] = static () => new Phrases.PhrasesPage(),
-    };
-
-    public static void Register(IPageDescriptor descriptor, Func<UserControl> createView)
+    public static void Register(IPageDescriptor descriptor, Func<EngineClient?, UserControl> createView)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(createView);
@@ -22,9 +15,16 @@ public static class PageRegistry
         Factories[descriptor.Id] = createView;
     }
 
+    private static readonly Dictionary<string, Func<EngineClient?, UserControl>> Factories = new(StringComparer.Ordinal)
+    {
+        [PageIds.Settings] = static client => new Settings.SettingsPage(client),
+        [PageIds.Health] = static client => new Health.HealthPage(client),
+        [PageIds.Phrases] = static client => new Phrases.PhrasesPage(client),
+    };
+
     public static IPageDescriptor Resolve(string pageId) => Catalog.Resolve(pageId);
 
-    public static UserControl ResolveView(string pageId)
+    public static UserControl ResolveView(string pageId, EngineClient? client = null)
     {
         var descriptor = Catalog.Resolve(pageId);
         if (!Factories.TryGetValue(descriptor.Id, out var create))
@@ -32,6 +32,6 @@ public static class PageRegistry
             throw new InvalidOperationException($"Shell page '{descriptor.Id}' is registered without a view factory.");
         }
 
-        return create();
+        return create(client);
     }
 }

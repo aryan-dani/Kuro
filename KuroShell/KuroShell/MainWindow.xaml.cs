@@ -1,9 +1,11 @@
 using System.Text.Json;
 using KuroShell.Core;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
+using Windows.UI;
 
 namespace KuroShell;
 
@@ -22,6 +24,7 @@ public sealed partial class MainWindow : Window
         SystemBackdrop = null;
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(DragRegion);
+        ApplyLightCaptionButtons();
         AppWindow.Resize(new SizeInt32(1080, 720));
         _nav =
         [
@@ -38,10 +41,33 @@ public sealed partial class MainWindow : Window
         RenderThread();
         _onThread = RenderThread;
         ConversationLog.Changed += _onThread;
-        Closed += (_, _) => ConversationLog.Changed -= _onThread;
-        BuildPlayground();
+        App.ShellStateChanged += OnShellState;
+        Closed += (_, _) =>
+        {
+            ConversationLog.Changed -= _onThread;
+            App.ShellStateChanged -= OnShellState;
+        };
+        Composer.Bind(_client);
+        Composer.Status += SetStatus;
         Select("Conversation");
+        SetShellState("idle");
         _loading = false;
+    }
+
+    private void ApplyLightCaptionButtons()
+    {
+        var ink = Color.FromArgb(255, 20, 20, 20);
+        var mute = Color.FromArgb(255, 82, 81, 78);
+        var hover = Color.FromArgb(255, 230, 229, 222);
+        var titleBar = AppWindow.TitleBar;
+        titleBar.ButtonForegroundColor = ink;
+        titleBar.ButtonHoverForegroundColor = ink;
+        titleBar.ButtonPressedForegroundColor = ink;
+        titleBar.ButtonInactiveForegroundColor = mute;
+        titleBar.ButtonBackgroundColor = Colors.Transparent;
+        titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        titleBar.ButtonHoverBackgroundColor = hover;
+        titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 212, 211, 204);
     }
 
     private async void OnNewConversation(object sender, RoutedEventArgs e)
@@ -78,19 +104,24 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void OnPauseToggled(object sender, RoutedEventArgs e)
+    private void OnEmptyChip(object sender, RoutedEventArgs e)
     {
-        if (_loading)
+        if (sender is Button button && button.Tag is string phrase)
         {
-            return;
+            Composer.Fill(phrase);
         }
+    }
 
-        var json = PauseToggle.IsOn ? "{\"paused\":true}" : "{\"paused\":false}";
-        var ok = await _client.SendAsync(HttpMethod.Put, "/config", json);
-        if (!ok)
-        {
-            SetStatus("The engine API is not answering.");
-        }
+    private void OnDeskOn(object sender, RoutedEventArgs e) => _ = Composer.SendTextAsync("Desk on");
+
+    private void OnDeskOff(object sender, RoutedEventArgs e) => _ = Composer.SendTextAsync("Desk off");
+
+    private void OnShellState(string state) => SetShellState(state);
+
+    private void SetShellState(string state)
+    {
+        var label = string.IsNullOrWhiteSpace(state) || state is "hidden" ? "idle" : state;
+        StateChipText.Text = label;
     }
 
     private void OnOpenLogs(object sender, RoutedEventArgs e)
@@ -106,12 +137,6 @@ public sealed partial class MainWindow : Window
             FileName = logs,
             UseShellExecute = true,
         });
-    }
-
-    private void OnRestart(object sender, RoutedEventArgs e)
-    {
-        SetStatus("Restarting.");
-        Task.Run(App.Supervisor.Restart);
     }
 
     private async Task ShowVoice()
@@ -244,11 +269,7 @@ public sealed partial class MainWindow : Window
 
     private async Task ShowSystem()
     {
-        var config = await _client.GetAsync("/config");
         var status = await _client.GetAsync("/status");
-        _loading = true;
-        PauseToggle.IsOn = config?.RootElement.TryGetProperty("paused", out var paused) == true && paused.GetBoolean();
-        _loading = false;
         var logs = status?.RootElement.TryGetProperty("logs", out var folder) == true ? folder.GetString() : "";
         LogPath.Text = string.IsNullOrEmpty(logs) ? "Log folder unavailable." : logs!;
         var routerMode = status?.RootElement.TryGetProperty("router_mode", out var rm) == true ? rm.GetString() : "";
@@ -298,44 +319,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void BuildPlayground()
-    {
-        var wrap = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        foreach (var state in new[] { "listening", "thinking", "speaking", "result", "error", "hidden" })
-        {
-            var name = state;
-            var button = new Button
-            {
-                Content = name,
-                Style = (Style)Root.Resources["QuietButton"],
-            };
-            button.Click += (_, _) => App.Hud.ShowState(name);
-            wrap.Children.Add(button);
-        }
-
-        var width = Slider("Width", DesignTokens.BarWidth, value => DesignTokens.BarWidth = value);
-        var gap = Slider("Gap", DesignTokens.BarGap, value => DesignTokens.BarGap = value);
-        Playground.Children.Add(wrap);
-        Playground.Children.Add(width);
-        Playground.Children.Add(gap);
-    }
-
-    private static Slider Slider(string label, double start, Action<double> apply)
-    {
-        var slider = new Slider
-        {
-            Header = label,
-            Minimum = 1,
-            Maximum = 8,
-            Value = start,
-            Width = 240,
-            Margin = new Thickness(0, 12, 0, 0),
-            FontFamily = new FontFamily(DesignTokens.Face),
-        };
-        slider.ValueChanged += (_, args) => apply(args.NewValue);
-        return slider;
-    }
-
     private void RenderThread()
     {
         if (DispatcherQueue is not null && !DispatcherQueue.HasThreadAccess)
@@ -346,7 +329,9 @@ public sealed partial class MainWindow : Window
 
         ThreadList.Children.Clear();
         var turns = ConversationLog.Buffer.Turns;
-        EmptyState.Visibility = turns.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var empty = turns.Count == 0;
+        EmptyState.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        EmptyChips.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
         foreach (var turn in turns)
         {
             ThreadList.Children.Add(TurnCard(turn));
@@ -432,6 +417,7 @@ public sealed partial class MainWindow : Window
         {
             var on = button.Tag as string == page;
             button.Background = on ? DesignTokens.DimBrush : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            button.BorderBrush = on ? DesignTokens.InkBrush : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         }
     }
 

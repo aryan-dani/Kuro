@@ -7,6 +7,139 @@ namespace KuroShell.Tests;
 public class CoreTests
 {
     [Fact]
+    public void Hud_idle_hidden_without_idle_dot()
+    {
+        Assert.False(HudShowPolicy.CapsuleVisible("idle", showIdleDot: false));
+        Assert.False(HudShowPolicy.CapsuleVisible("hidden", showIdleDot: false));
+        Assert.True(HudShowPolicy.CapsuleVisible("listening", showIdleDot: false));
+        Assert.True(HudShowPolicy.CapsuleVisible("speaking", showIdleDot: false));
+        Assert.True(HudShowPolicy.CapsuleVisible("idle", showIdleDot: true));
+    }
+
+    [Fact]
+    public void App_restart_schedules_delayed_relaunch()
+    {
+        var info = AppRestart.DelayedRelaunch(@"C:\Program Files\Kuro\KuroShell.exe", delaySeconds: 1);
+        Assert.Equal("cmd.exe", info.FileName);
+        Assert.Contains("timeout /t 1", info.Arguments);
+        Assert.Contains(@"C:\Program Files\Kuro\KuroShell.exe", info.Arguments);
+        Assert.True(info.CreateNoWindow);
+    }
+
+    [Fact]
+    public void Phrase_catalog_filters_case_insensitive()
+    {
+        Assert.Contains(PhraseCatalog.All, p => p.Contains("Meet", StringComparison.Ordinal));
+        var filtered = PhraseCatalog.Filter("desk");
+        Assert.All(filtered, p => Assert.Contains("desk", p, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(PhraseCatalog.All.Count, PhraseCatalog.Filter("").Count);
+    }
+
+    [Fact]
+    public void Start_menu_shortcut_path_is_under_programs()
+    {
+        var path = StartMenuShortcut.DefaultShortcutPath();
+        Assert.EndsWith("Kuro.lnk", path);
+        Assert.Contains("Start Menu", path);
+    }
+
+    [Fact]
+    public void Shell_publish_path_is_under_local_app_data()
+    {
+        var dir = ShellPublish.PublishDirectory();
+        Assert.Contains("Kuro", dir);
+        Assert.EndsWith("shell", dir);
+        Assert.Equal(Path.Combine(dir, "KuroShell.exe"), ShellPublish.PublishedExePath());
+    }
+
+    [Fact]
+    public void Engine_locate_prefers_newest_write_time()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "kuro-engine-locate-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var older = Path.Combine(root, "old.exe");
+            var newer = Path.Combine(root, "new.exe");
+            File.WriteAllText(older, "old");
+            File.WriteAllText(newer, "new");
+            File.SetLastWriteTimeUtc(older, DateTime.UtcNow.AddHours(-2));
+            File.SetLastWriteTimeUtc(newer, DateTime.UtcNow);
+            Assert.Equal(newer, EngineLocate.PreferNewest([older, newer]));
+            Assert.Equal(newer, EngineLocate.PreferNewest([newer, older]));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Engine_locate_candidates_order_release_pending_local_debug()
+    {
+        var paths = EngineLocate.CandidatePaths(@"C:\repo", @"C:\LocalAppData").ToList();
+        Assert.Equal(4, paths.Count);
+        Assert.EndsWith(Path.Combine("target", "release", "kuro-engine.exe"), paths[0]);
+        Assert.Equal(Path.Combine(@"C:\LocalAppData", "Kuro", "kuro-engine.next.exe"), paths[1]);
+        Assert.Equal(Path.Combine(@"C:\LocalAppData", "Kuro", "kuro-engine.exe"), paths[2]);
+        Assert.EndsWith(Path.Combine("target", "debug", "kuro-engine.exe"), paths[3]);
+    }
+
+    [Fact]
+    public void Engine_locate_applies_pending_over_current()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "kuro-engine-pending-" + Guid.NewGuid().ToString("N"));
+        var kuro = Path.Combine(root, "Kuro");
+        Directory.CreateDirectory(kuro);
+        try
+        {
+            var pending = EngineLocate.PendingEnginePath(root);
+            var current = EngineLocate.LocalEnginePath(root);
+            File.WriteAllText(pending, "next-bytes");
+            File.WriteAllText(current, "old-bytes");
+            Assert.True(EngineLocate.TryApplyPending(root));
+            Assert.Equal("next-bytes", File.ReadAllText(current));
+            Assert.False(File.Exists(pending));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Shell_launch_opens_home_unless_tray_only()
+    {
+        Assert.True(ShellLaunch.ShouldOpenHome([]));
+        Assert.True(ShellLaunch.ShouldOpenHome(["--open"]));
+        Assert.False(ShellLaunch.ShouldOpenHome([ShellLaunch.TrayOnlyArg]));
+        Assert.False(ShellLaunch.ShouldOpenHome(["--tray-only"]));
+    }
+
+    [Fact]
+    public void Shell_say_marks_meet_whatsapp_workflow_voice_only()
+    {
+        Assert.True(ShellSay.IsVoiceOnly("Make a Google Meet"));
+        Assert.True(ShellSay.IsVoiceOnly("Send a Google Meet link to Mom"));
+        Assert.True(ShellSay.IsVoiceOnly("send this link on whatsapp"));
+        Assert.True(ShellSay.IsVoiceOnly("run hello workflow"));
+        Assert.False(ShellSay.IsVoiceOnly("What time is it"));
+        Assert.False(ShellSay.IsVoiceOnly("Desk on"));
+        Assert.False(ShellSay.IsVoiceOnly("What's the news"));
+        Assert.Contains("\"mode\":\"execute\"", ShellSay.ExecuteBody("Help"));
+        Assert.Contains("\"mode\":\"dry_run\"", ShellSay.DryRunBody("Help"));
+    }
+
+    [Fact]
+    public void Conversation_buffer_append_records_shell_turn()
+    {
+        var buffer = new ConversationBuffer();
+        Assert.True(buffer.Append("What time is it", "It is noon.", "t0"));
+        var turn = Assert.Single(buffer.Turns);
+        Assert.Equal("What time is it", turn.You);
+    }
+
+    [Fact]
     public void Protocol_compatible_with_same_major()
     {
         Assert.True(ProtocolVersion.CompatibleWith(ProtocolVersion.Current));

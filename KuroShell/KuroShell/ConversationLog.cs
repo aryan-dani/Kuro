@@ -50,6 +50,20 @@ public static class ConversationLog
         Changed?.Invoke();
     }
 
+    /// Records a typed shell turn (composer or phrase Try).
+    public static void Record(string you, string kuro)
+    {
+        EnsureLoaded();
+        var at = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        if (!Buffer.Append(you, kuro, at))
+        {
+            return;
+        }
+
+        Write(Buffer.Turns);
+        Changed?.Invoke();
+    }
+
     public static void Clear()
     {
         _loaded = true;

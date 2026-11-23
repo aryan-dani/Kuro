@@ -19,7 +19,7 @@ public sealed partial class MainWindow
         RegistryHost.Visibility = registry ? Visibility.Visible : Visibility.Collapsed;
         if (registry)
         {
-            RegistryHost.Content = PageRegistry.ResolveView(page);
+            RegistryHost.Content = PageRegistry.ResolveView(page, _client);
         }
 
         Select(page);

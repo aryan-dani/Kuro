@@ -80,6 +80,28 @@ public sealed class ConversationBuffer
         return true;
     }
 
+    /// Adds a turn from the shell composer without waiting for HUD frames.
+    public bool Append(string you, string kuro, string at)
+    {
+        you = (you ?? "").Trim();
+        kuro = (kuro ?? "").Trim();
+        if (you.Length == 0 || kuro.Length == 0)
+        {
+            return false;
+        }
+
+        _turns.Add(new Turn { You = you, Kuro = kuro, At = at });
+        while (_turns.Count > Cap)
+        {
+            _turns.RemoveAt(0);
+        }
+
+        _committedYou = you;
+        _committedKuro = kuro;
+        _pendingYou = "";
+        return true;
+    }
+
     public void Clear()
     {
         _turns.Clear();

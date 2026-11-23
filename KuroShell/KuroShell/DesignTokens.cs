@@ -22,8 +22,8 @@ public static class DesignTokens
     public static double WorkAreaGap { get; set; } = 24;
     public static int ResultHoldMs { get; set; } = 1500;
 
-    public static double RadiusRow => 0;
-    public static double RadiusCard => 0;
+    public static double RadiusRow => 8;
+    public static double RadiusCard => 8;
     public static double TitleSize { get; } = 28;
     public static double SectionSize { get; } = 15;
     public static double BodySize { get; } = 14;
@@ -37,7 +37,8 @@ public static class DesignTokens
     public static Color Dim { get; } = Color.FromArgb(255, 228, 226, 216);
     public static Color Muted { get; } = Color.FromArgb(255, 82, 81, 78);
     public static Color Surface { get; } = Canvas;
-    public static Color Hairline { get; } = Color.FromArgb(255, 20, 20, 20);
+    public static Color Hairline { get; } = Color.FromArgb(255, 228, 226, 216);
+    public static Color SoftHairline { get; } = Color.FromArgb(255, 228, 226, 216);
 
     public static Color ChatPanel { get; } = Color.FromArgb(255, 10, 10, 10);
     public static Color ChatInk { get; } = Color.FromArgb(255, 240, 240, 240);

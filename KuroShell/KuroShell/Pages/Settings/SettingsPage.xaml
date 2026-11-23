@@ -2,5 +2,37 @@
     x:Class="KuroShell.Pages.Settings.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <TextBlock Text="Settings (stub)" />
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+        <StackPanel Padding="0,0,0,24">
+            <TextBlock Text="Settings" FontFamily="ms-appx:///Assets/Fonts/SpaceGrotesk-Bold.ttf#Space Grotesk" FontSize="28" Foreground="#141414" />
+            <TextBlock x:Name="StatusNote" Margin="0,8,0,16"
+                       FontFamily="ms-appx:///Assets/Fonts/JetBrainsMono-Regular.ttf#JetBrains Mono"
+                       FontSize="12" Foreground="#52514E" Text="" />
+            <Border Background="#FFFFFF" BorderBrush="#E4E2D8" BorderThickness="1" CornerRadius="8" Padding="20,12" Margin="0,0,0,16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="LISTENING" FontFamily="ms-appx:///Assets/Fonts/JetBrainsMono-Regular.ttf#JetBrains Mono"
+                               FontSize="12" Foreground="#52514E" CharacterSpacing="20" />
+                    <ToggleSwitch x:Name="PauseToggle" Header="Pause listening" Toggled="OnPauseToggled" />
+                    <ToggleSwitch x:Name="HudTextToggle" Header="Show reply text in HUD" Toggled="OnHudTextToggled" />
+                </StackPanel>
+            </Border>
+            <Border Background="#FFFFFF" BorderBrush="#E4E2D8" BorderThickness="1" CornerRadius="8" Padding="20,12">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="APP" FontFamily="ms-appx:///Assets/Fonts/JetBrainsMono-Regular.ttf#JetBrains Mono"
+                               FontSize="12" Foreground="#52514E" CharacterSpacing="20" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Restart engine" Click="OnRestartEngine"
+                                Background="#FFFFFF" BorderBrush="#E4E2D8" BorderThickness="1" CornerRadius="8" Padding="14,8"
+                                FontFamily="ms-appx:///Assets/Fonts/SpaceGrotesk-Regular.ttf#Space Grotesk" Foreground="#141414" />
+                        <Button Content="Restart Kuro" Click="OnRestartKuro"
+                                Background="#FFFFFF" BorderBrush="#E4E2D8" BorderThickness="1" CornerRadius="8" Padding="14,8"
+                                FontFamily="ms-appx:///Assets/Fonts/SpaceGrotesk-Regular.ttf#Space Grotesk" Foreground="#141414" />
+                    </StackPanel>
+                    <TextBlock Text="Voice models and languages live under Voice. Desk and contacts under Devices and Contacts."
+                               FontFamily="ms-appx:///Assets/Fonts/SpaceGrotesk-Regular.ttf#Space Grotesk"
+                               FontSize="14" Foreground="#141414" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>
