@@ -136,6 +136,7 @@ pub fn arm_ptt_hotkey(arms: PttArms, singleton_lock: &std::path::Path) {
                 })
                 .unwrap_or_default();
             let raw_rms = kuro_audio::rms(&pcm);
+            let clip = kuro_audio::clip::save_clip(&kuro_core::KuroPaths::from_env().root.join("audio"), &pcm);
             kuro_audio::normalize_gain(&mut pcm, 0.15);
             let energy = kuro_audio::rms(&pcm);
             log_line(&format!(
@@ -157,6 +158,7 @@ pub fn arm_ptt_hotkey(arms: PttArms, singleton_lock: &std::path::Path) {
             spawn_ptt_release_worker(PttReleaseJob {
                 gate_ci,
                 pcm,
+                clip,
                 epoch,
                 voice: up_voice.clone(),
                 state: up_state.clone(),

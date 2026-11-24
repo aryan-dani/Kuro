@@ -3,6 +3,10 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
+pub mod clip;
+mod resample;
+pub use resample::Resampler;
+
 const RING_SAMPLES: usize = 480_000;
 const HUD_BANKS: usize = 3;
 
@@ -250,8 +254,8 @@ pub struct CaptureSession {
     _stream: cpal::Stream,
 }
 
-fn push_producer(producer: &mut rtrb::Producer<f32>, interleaved: &[f32], channels: usize, sample_rate: u32) {
-    let mono = to_16k_mono(interleaved, channels, sample_rate);
+fn push_producer(producer: &mut rtrb::Producer<f32>, resampler: &mut Resampler, interleaved: &[f32], channels: usize) {
+    let mono = resampler.process(&to_mono(interleaved, channels));
     for sample in mono {
         let _ = producer.push(sample);
     }
@@ -287,7 +291,8 @@ pub fn start_ptt_capture(producer: rtrb::Producer<f32>) -> Result<(CaptureSessio
             &config,
             {
                 let mut producer = producer;
-                move |data: &[f32], _| push_producer(&mut producer, data, channels, sample_rate)
+                let mut resampler = Resampler::new(sample_rate, 16_000);
+                move |data: &[f32], _| push_producer(&mut producer, &mut resampler, data, channels)
             },
             err_fn,
             None,
@@ -296,9 +301,10 @@ pub fn start_ptt_capture(producer: rtrb::Producer<f32>) -> Result<(CaptureSessio
             &config,
             {
                 let mut producer = producer;
+                let mut resampler = Resampler::new(sample_rate, 16_000);
                 move |data: &[i16], _| {
                     let floats: Vec<f32> = data.iter().map(|s| *s as f32 / i16::MAX as f32).collect();
-                    push_producer(&mut producer, &floats, channels, sample_rate);
+                    push_producer(&mut producer, &mut resampler, &floats, channels);
                 }
             },
             err_fn,
@@ -308,9 +314,10 @@ pub fn start_ptt_capture(producer: rtrb::Producer<f32>) -> Result<(CaptureSessio
             &config,
             {
                 let mut producer = producer;
+                let mut resampler = Resampler::new(sample_rate, 16_000);
                 move |data: &[u16], _| {
                     let floats: Vec<f32> = data.iter().map(|s| (*s as f32 / u16::MAX as f32) * 2.0 - 1.0).collect();
-                    push_producer(&mut producer, &floats, channels, sample_rate);
+                    push_producer(&mut producer, &mut resampler, &floats, channels);
                 }
             },
             err_fn,

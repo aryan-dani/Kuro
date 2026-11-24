@@ -10,6 +10,8 @@ use crate::{TurnGate, VoiceTurn, set_hud};
 pub(crate) struct PttReleaseJob {
     pub gate_ci: bool,
     pub pcm: Vec<f32>,
+    /// Raw clip saved for measuring recognition (see `kuro_audio::clip`).
+    pub clip: Option<std::path::PathBuf>,
     pub epoch: u64,
     pub voice: Arc<Mutex<VoiceTurn>>,
     pub state: Option<Arc<AppState>>,
@@ -24,7 +26,7 @@ pub(crate) fn spawn_ptt_release_worker(job: PttReleaseJob) {
 }
 
 fn run_ptt_release(job: PttReleaseJob) {
-    let PttReleaseJob { gate_ci, pcm, epoch, voice, state, clock, worker_gate } = job;
+    let PttReleaseJob { gate_ci, pcm, clip, epoch, voice, state, clock, worker_gate } = job;
     let _guard = worker_gate.worker_guard(epoch);
     let book = kuro_tools::whatsapp::address_book();
     let contacts = kuro_tools::contact_bias::stt_contact_names(&book);
@@ -42,6 +44,9 @@ fn run_ptt_release(job: PttReleaseJob) {
         }
     };
     log_line(&format!("stt text=`{transcript}`"));
+    if let Some(path) = clip.as_ref() {
+        kuro_audio::clip::write_transcript(path, &transcript);
+    }
     if let Some(app) = state.as_ref() {
         let label = if transcript.is_empty() { "quiet" } else { "thinking" };
         set_hud(&app.hud, "thinking", label, None, &transcript, "", Some(&app.hud_wake));
