@@ -65,7 +65,9 @@ fn show_qr(code: &str) {
     let _ = std::fs::create_dir_all(&folder);
     let path = folder.join("wa_link.txt");
     let _ = std::fs::write(&path, code);
-    let _ = std::process::Command::new("cmd")
+    let mut command = std::process::Command::new("cmd");
+    crate::meet_join::hide_console(&mut command);
+    let _ = command
         .args(["/C", "start", "", &path.to_string_lossy()])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

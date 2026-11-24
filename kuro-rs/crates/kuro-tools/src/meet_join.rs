@@ -5,6 +5,18 @@ use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
 
+/// Stop a console helper (powershell, cmd) from opening its own visible console window.
+pub(crate) fn hide_console(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct WinSnap {
     pub hwnd: isize,
@@ -133,7 +145,9 @@ while ([DateTime]::UtcNow -lt $deadline) {{
 exit 2
 "#
     );
-    let mut child = match Command::new("powershell")
+    let mut command = Command::new("powershell");
+    hide_console(&mut command);
+    let mut child = match command
         .args(["-NoProfile", "-Sta", "-Command", &script])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
