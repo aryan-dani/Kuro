@@ -210,15 +210,16 @@ fn send_one(api: &Api, uuid: &CString, digits: &str, text: &str) -> Result<(), S
     let lid = lookup_lid(api, uuid, &phone);
     let used_lid = lid.is_some();
     let target = lid.unwrap_or_else(|| phone.clone());
-    if call_send(api, uuid, &target, &msg) {
+    let Err(first) = call_send(api, uuid, &target, &msg) else {
         log_wa(if used_lid { "whatsapp send ok via=lid" } else { "whatsapp send ok via=phone" });
         return Ok(());
-    }
-    if used_lid && call_send(api, uuid, &phone, &msg) {
+    };
+    if used_lid && call_send(api, uuid, &phone, &msg).is_ok() {
         log_wa("whatsapp send ok via=phone");
         return Ok(());
     }
-    log_wa("whatsapp send fail");
+    let via = if used_lid { "lid" } else { "phone" };
+    log_wa(&format!("whatsapp send fail via={via} reason={}", crate::wa_proto::redact_digits(&first)));
     Err("I couldn't send that WhatsApp.".into())
 }
 
@@ -241,18 +242,24 @@ fn lookup_lid(api: &Api, uuid: &CString, phone: &[u8]) -> Option<Vec<u8>> {
     Some(crate::wa_proto::encode_jid(&user, "lid"))
 }
 
-fn call_send(api: &Api, uuid: &CString, jid: &[u8], msg: &[u8]) -> bool {
+/// `Err` carries the reason the bridge gave (or that it gave no reply).
+fn call_send(api: &Api, uuid: &CString, jid: &[u8], msg: &[u8]) -> Result<(), String> {
     unsafe {
         let ptr = (api.send_message)(uuid.as_ptr(), jid.as_ptr(), jid.len() as c_int, msg.as_ptr(), msg.len() as c_int);
         if ptr.is_null() {
-            return false;
+            return Err("no reply from the bridge".into());
         }
-        let ok = !(*ptr).ptr.is_null() && (*ptr).size > 0 && {
+        let outcome = if (*ptr).ptr.is_null() || (*ptr).size == 0 {
+            Err("empty reply from the bridge".into())
+        } else {
             let slice = std::slice::from_raw_parts((*ptr).ptr, (*ptr).size);
-            crate::wa_proto::proto_error(slice).is_none()
+            match crate::wa_proto::proto_error(slice) {
+                None => Ok(()),
+                Some(reason) => Err(reason),
+            }
         };
         (api.free_bytes)(ptr);
-        ok
+        outcome
     }
 }
 

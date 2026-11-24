@@ -108,9 +108,39 @@ fn pb_varint_field(field: u32, v: u64, out: &mut Vec<u8>) {
     pb_varint(v, out);
 }
 
+/// Hide phone-number-like digit runs (5 or more) before a reason goes into the log.
+pub fn redact_digits(text: &str) -> String {
+    fn flush(out: &mut String, run: &mut String) {
+        if run.len() >= 5 {
+            out.push('#');
+        } else {
+            out.push_str(run);
+        }
+        run.clear();
+    }
+    let mut out = String::new();
+    let mut run = String::new();
+    for ch in text.chars() {
+        if ch.is_ascii_digit() {
+            run.push(ch);
+        } else {
+            flush(&mut out, &mut run);
+            out.push(ch);
+        }
+    }
+    flush(&mut out, &mut run);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn redact_hides_numbers_but_keeps_short_codes() {
+        assert_eq!(redact_digits("jid 15551234567 rejected"), "jid # rejected");
+        assert_eq!(redact_digits("status 401"), "status 401");
+    }
 
     #[test]
     fn any_error_string_is_a_failure() {
