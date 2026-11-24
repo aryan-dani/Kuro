@@ -1189,6 +1189,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kuro-bench"
+version = "0.1.0"
+dependencies = [
+ "kuro-audio",
+ "kuro-core",
+ "kuro-router",
+ "kuro-stt",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "kuro-cli"
 version = "0.1.0"
 dependencies = [

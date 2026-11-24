@@ -452,7 +452,7 @@ Until then, Python is the source of truth for behavior.
 
 Speech weights:
 
-- Whisper: in-process `whisper-rs` loads GGML `ggml-small.en.bin` from `KURO_WHISPER_GGML`, `%LOCALAPPDATA%\Kuro\models\`, or `bench/models/`. Beam 1 is used for partials and `KURO_WHISPER_BEAM` (default 5) for the final pass. The OpenVINO INT8 tree under `bench/models/whisper-small.en-int8` remains the documented NPU directory; this build does not link the OpenVINO C API.
+- Whisper: in-process `whisper-rs` prefers `ggml-large-v3-turbo-q5_0.bin` in `%LOCALAPPDATA%\Kuro\models\`, then `ggml-small.en.bin` from `KURO_WHISPER_GGML`, that models folder, or `bench/models/`. GPU builds use beam 5 and the full encoder context. CPU builds stay greedy. The OpenVINO INT8 tree under `bench/models/whisper-small.en-int8` remains the documented NPU directory; this build does not link the OpenVINO C API.
 - Piper: one long-lived `piper.exe` (under `%LOCALAPPDATA%\Kuro\piper` when installed) runs `bench/models/piper/en_US-lessac-medium.onnx` with `--output_raw`. Boot phrases are prebuilt into memory and `%LOCALAPPDATA%\Kuro\tts_cache`.
 - `pyttsx3`: WinRT `Windows.Media.SpeechSynthesis.SpeechSynthesizer` returns PCM. There is no tone fallback.
 

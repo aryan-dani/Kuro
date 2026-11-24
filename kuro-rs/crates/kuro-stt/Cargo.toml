@@ -12,6 +12,9 @@ serde_json = { workspace = true }
 windows-sys = { workspace = true }
 whisper-rs = { workspace = true }
 
+[features]
+cuda = ["whisper-rs/cuda"]
+
 [dev-dependencies]
 serde_json = { workspace = true }
 base64 = { workspace = true }

@@ -21,8 +21,8 @@ pub fn shutdown() {
     *slot = None;
 }
 
-pub fn prewarm(_device: &str) -> Result<(), String> {
-    ensure()
+pub fn prewarm(device: &str) -> Result<(), String> {
+    ensure(device)
 }
 
 fn repo_root() -> PathBuf {
@@ -37,9 +37,12 @@ pub fn ggml_path() -> Option<PathBuf> {
         }
     }
     if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
-        let candidate = local.join("Kuro").join("models").join("ggml-small.en.bin");
-        if candidate.is_file() {
-            return Some(candidate);
+        let models = local.join("Kuro").join("models");
+        for name in ["ggml-large-v3-turbo-q5_0.bin", "ggml-small.en.bin"] {
+            let candidate = models.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
         }
     }
     let bench = repo_root().join("bench").join("models");
@@ -52,22 +55,39 @@ pub fn ggml_path() -> Option<PathBuf> {
     None
 }
 
-fn load_model() -> Result<Model, String> {
+fn want_gpu(device: &str) -> bool {
+    device.eq_ignore_ascii_case("cuda")
+}
+
+fn load_model(device: &str) -> Result<Model, String> {
     let path = ggml_path().ok_or_else(|| {
         "Whisper GGML model is missing. Set KURO_WHISPER_GGML or run Build-KuroNative.ps1.".to_string()
     })?;
-    let ctx = WhisperContext::new_with_params(path.to_string_lossy().as_ref(), WhisperContextParameters::default())
+    let gpu = want_gpu(device);
+    #[cfg(feature = "cuda")]
+    let cparams = {
+        let mut params = WhisperContextParameters::default();
+        params.use_gpu(gpu);
+        params
+    };
+    #[cfg(not(feature = "cuda"))]
+    let cparams = WhisperContextParameters::default();
+    let file = path.file_name().and_then(|n| n.to_str()).unwrap_or("whisper");
+    let line = format!("stt engine whisper gpu={gpu} model={file}");
+    let paths = kuro_core::KuroPaths::from_env();
+    kuro_core::append_rotating_log(&paths.log(), &line, 1_000_000);
+    let ctx = WhisperContext::new_with_params(path.to_string_lossy().as_ref(), cparams)
         .map_err(|err| format!("Could not load Whisper GGML: {err}"))?;
     let state = ctx.create_state().map_err(|err| format!("Whisper state failed: {err}"))?;
     Ok(Model { state, _ctx: ctx })
 }
 
-fn ensure() -> Result<(), String> {
+fn ensure(device: &str) -> Result<(), String> {
     let mut slot = MODEL.lock().map_err(|_| "Whisper model lock failed.".to_string())?;
     if slot.is_some() {
         return Ok(());
     }
-    *slot = Some(load_model()?);
+    *slot = Some(load_model(device)?);
     Ok(())
 }
 
@@ -153,17 +173,11 @@ fn resample_to_16k(pcm: &[f32], sample_rate: u32) -> Vec<f32> {
     out
 }
 
-pub fn transcribe(
-    pcm: &[f32],
-    sample_rate: u32,
-    _partial: bool,
-    prompt: &str,
-    _device: &str,
-) -> Result<String, String> {
+pub fn transcribe(pcm: &[f32], sample_rate: u32, _partial: bool, prompt: &str, device: &str) -> Result<String, String> {
     if pcm.is_empty() {
         return Ok(String::new());
     }
-    ensure()?;
+    ensure(device)?;
     let resampled = resample_to_16k(pcm, sample_rate);
     let audio = crate::vad::trim_best(&resampled, trim_silence_energy);
     if audio.is_empty() {
@@ -172,12 +186,18 @@ pub fn transcribe(
     let mut slot = MODEL.lock().map_err(|_| "Whisper model lock failed.".to_string())?;
     let model = slot.as_mut().ok_or_else(|| "Whisper model is not loaded.".to_string())?;
 
+    let gpu = want_gpu(device);
     let duration_secs = (audio.len() as f32) / 16_000.0;
     // 1500 encoder frames = 30.0s -> 50 frames per second, plus 64-frame safety margin, rounded up to multiple of 64.
     let raw_ctx = ((duration_secs * 50.0) as i32) + 64;
-    let audio_ctx = ((raw_ctx + 63) / 64 * 64).clamp(128, 1500);
+    let audio_ctx = if gpu { 1500 } else { ((raw_ctx + 63) / 64 * 64).clamp(128, 1500) };
 
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+    let strategy = if gpu {
+        SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 }
+    } else {
+        SamplingStrategy::Greedy { best_of: 1 }
+    };
+    let mut params = FullParams::new(strategy);
     params.set_n_threads(std::thread::available_parallelism().map(|n| (n.get() as i32).clamp(4, 8)).unwrap_or(6));
     params.set_translate(false);
     params.set_language(Some("en"));

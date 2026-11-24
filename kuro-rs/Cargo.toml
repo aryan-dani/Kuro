@@ -19,6 +19,7 @@ members = [
     "crates/kuro-llm",
     "crates/kuro-triggers",
     "crates/kuro-cli",
+    "crates/kuro-bench",
 ]
 
 [workspace.package]

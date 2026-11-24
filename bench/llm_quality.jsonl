@@ -1,0 +1,40 @@
+{"id":"fact-1","kind":"fact","prompt":"What is a mutex in one or two spoken sentences?"}
+{"id":"fact-2","kind":"fact","prompt":"What does TCP stand for, and what does it do? Keep it short."}
+{"id":"fact-3","kind":"fact","prompt":"How many bits are in a byte?"}
+{"id":"fact-4","kind":"fact","prompt":"What is the capital of Japan?"}
+{"id":"fact-5","kind":"fact","prompt":"What is a sample rate in audio?"}
+{"id":"fmt-1","kind":"format","prompt":"Explain a hash map. One or two sentences. No lists. No markdown."}
+{"id":"fmt-2","kind":"format","prompt":"Tell me why types help programmers. Spoken sentences only."}
+{"id":"fmt-3","kind":"format","prompt":"Describe a compiler in two short sentences. Do not use bullet points."}
+{"id":"fmt-4","kind":"format","prompt":"What is latency? Answer as if you are speaking aloud."}
+{"id":"fmt-5","kind":"format","prompt":"Explain overfitting without a list."}
+{"id":"mem-1","kind":"memory","prompt":"Remember that my project is a voice assistant named Kuro. Reply with just okay."}
+{"id":"mem-2","kind":"memory","prompt":"What is the project name I just told you?"}
+{"id":"mem-3","kind":"memory","prompt":"I also use Rust. What language and project did I mention?"}
+{"id":"mem-4","kind":"memory","prompt":"Repeat only the project name."}
+{"id":"idk-1","kind":"idk","prompt":"What is the exact temperature outside my window right now?"}
+{"id":"idk-2","kind":"idk","prompt":"Who won a match that is happening this minute?"}
+{"id":"idk-3","kind":"idk","prompt":"What did I eat for lunch yesterday?"}
+{"id":"idk-4","kind":"idk","prompt":"Read my latest private email subject."}
+{"id":"tool-1","kind":"tool","prompt":"Send a message to my mother on WhatsApp."}
+{"id":"tool-2","kind":"tool","prompt":"Turn on the desk lamp."}
+{"id":"tool-3","kind":"tool","prompt":"Open a browser and start a video meeting."}
+{"id":"tool-4","kind":"tool","prompt":"Play my playlist."}
+{"id":"code-1","kind":"code","prompt":"In Rust, what does the question mark operator do? Two spoken sentences."}
+{"id":"code-2","kind":"code","prompt":"What is a borrow checker trying to prevent?"}
+{"id":"code-3","kind":"code","prompt":"Why would a student use a hash map instead of a list for lookups?"}
+{"id":"code-4","kind":"code","prompt":"What is the difference between a thread and a process, briefly?"}
+{"id":"hing-1","kind":"hinglish","prompt":"Batao, CPU aur GPU mein farak kya hai? Short answer."}
+{"id":"hing-2","kind":"hinglish","prompt":"Exam ke time focus kaise rakhein? Two sentences."}
+{"id":"hing-3","kind":"hinglish","prompt":"India mein college semester system kya hota hai, briefly?"}
+{"id":"hing-4","kind":"hinglish","prompt":"WhatsApp pe voice note aur text mein farak, one sentence."}
+{"id":"amb-1","kind":"ambiguity","prompt":"Turn it off."}
+{"id":"amb-2","kind":"ambiguity","prompt":"Send that."}
+{"id":"amb-3","kind":"ambiguity","prompt":"Make it faster."}
+{"id":"amb-4","kind":"ambiguity","prompt":"Check it."}
+{"id":"spk-1","kind":"spoken","prompt":"Give me a calm one sentence reminder to take a break."}
+{"id":"spk-2","kind":"spoken","prompt":"Say good luck before an exam, one sentence."}
+{"id":"spk-3","kind":"spoken","prompt":"Describe rain in one spoken sentence."}
+{"id":"spk-4","kind":"spoken","prompt":"What is a kernel, as if you are talking, not writing a manual?"}
+{"id":"spk-5","kind":"spoken","prompt":"Why is sleep useful for studying? Two short sentences."}
+{"id":"spk-6","kind":"spoken","prompt":"What is entropy, in one spoken sentence?"}
