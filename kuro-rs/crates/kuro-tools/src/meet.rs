@@ -47,15 +47,59 @@ fn meet_open_enabled() -> bool {
     }
 }
 
-fn open_edge(link: &str) -> Result<bool, &'static str> {
+#[derive(Clone, Copy)]
+struct MeetView {
+    opened: bool,
+    joined: bool,
+}
+
+fn open_edge(link: &str) -> Result<MeetView, &'static str> {
     if !crate::meet_busy::live_meet_enabled() || !meet_open_enabled() {
-        return Ok(false);
+        return Ok(MeetView { opened: false, joined: false });
     }
     let Some(edge) = edge_path() else {
         return Err("missing");
     };
+    let before = crate::meet_join::titles();
     let args = edge_args(edge.to_string_lossy().as_ref(), link);
-    if Command::new(&args[0]).args(&args[1..]).spawn().is_ok() { Ok(true) } else { Err("spawn") }
+    if Command::new(&args[0]).args(&args[1..]).spawn().is_err() {
+        return Err("spawn");
+    }
+    let Some(hwnd) = crate::meet_join::wait_meet_window(&before, std::time::Duration::from_secs(10)) else {
+        log_meet("Meet window did not appear");
+        return Ok(MeetView { opened: true, joined: false });
+    };
+    crate::meet_join::focus(hwnd);
+    let joined = crate::meet_join::click_join(hwnd, std::time::Duration::from_secs(8));
+    crate::meet_join::focus(hwnd);
+    log_meet(if joined { "Meet join clicked" } else { "Meet join button was not clicked" });
+    Ok(MeetView { opened: true, joined })
+}
+
+fn log_meet(line: &str) {
+    kuro_core::append_rotating_log(&kuro_core::KuroPaths::from_env().log(), line, 1_000_000);
+}
+
+fn meet_speech(sent_err: Option<&str>, view: MeetView, shown: &str, link: &str) -> String {
+    if let Some(err) = sent_err {
+        return err.to_string();
+    }
+    if shown.is_empty() {
+        if view.joined {
+            return "Success: The Meet is open.".into();
+        }
+        if view.opened {
+            return "The Meet is open, but I couldn't press Join now.".into();
+        }
+        return format!("Success: Meet ready. {link}");
+    }
+    if view.joined {
+        return format!("Success: Sent the Meet link to {shown}.");
+    }
+    if view.opened {
+        return format!("Success: Sent the Meet link to {shown}, but I couldn't press Join now.");
+    }
+    format!("Success: Sent the Meet link to {shown}, but Edge did not open.")
 }
 
 pub fn run(arguments: &Value) -> String {
@@ -122,8 +166,7 @@ pub fn run_join(arguments: &Value) -> String {
 
 fn open_saved_link(link: &str, _shown: Option<&str>) -> String {
     match open_edge(link) {
-        Ok(true) => "Success: The Meet is open.".into(),
-        Ok(false) => format!("Success: Meet ready. {link}"),
+        Ok(view) => meet_speech(None, view, "", link),
         Err("missing") => "I couldn't find Microsoft Edge.".into(),
         Err(_) => "I couldn't open that Meet link.".into(),
     }
@@ -139,33 +182,24 @@ fn run_native(token_path: &Path, digits: &str, shown: &str, http: &MeetHttp) -> 
 
     meet_last::remember(&meet_last::store_path(), &link, shown);
 
-    // Link first so the contact is not waiting on a browser.
-    let sent_ok = if digits.is_empty() {
-        true
-    } else {
-        match crate::whatsapp::deliver_text(digits, &link) {
-            Ok(()) => true,
-            Err(err) => return err,
-        }
-    };
+    // Link first so the contact is not waiting on the Join button.
+    let sent_err = if digits.is_empty() { None } else { crate::whatsapp::deliver_text(digits, &link).err() };
 
-    let opened = match open_edge(&link) {
-        Ok(v) => v,
+    let view = match open_edge(&link) {
+        Ok(view) => view,
         Err("missing") if digits.is_empty() => {
             return "I couldn't find Microsoft Edge.".into();
         }
-        Err(_) => false,
+        Err(_) => MeetView { opened: false, joined: false },
     };
-    if digits.is_empty() {
-        if opened {
-            return "Success: The Meet is open.".into();
-        }
-        return format!("Success: Meet ready. {link}");
-    }
-    if sent_ok {
-        return format!("Success: Sent the Meet link to {shown}.");
-    }
-    "I couldn't send that Meet link.".into()
+    let speech = meet_speech(sent_err.as_deref(), view, shown, &link);
+    log_meet(&format!(
+        "make_meet result opened={} joined={} sent={}",
+        view.opened,
+        view.joined,
+        if sent_err.is_some() { "fail" } else { "ok" }
+    ));
+    speech
 }
 
 pub use crate::meet_http::{MeetHttp, create_space};
@@ -258,5 +292,23 @@ mod tests {
             std::env::remove_var("KURO_DATA_DIR");
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn join_miss_is_spoken_and_send_failure_is_not_success() {
+        let open =
+            meet_speech(None, MeetView { opened: true, joined: true }, "", "https://meet.google.com/abc-defg-hij");
+        assert_eq!(open, "Success: The Meet is open.");
+        let missed =
+            meet_speech(None, MeetView { opened: true, joined: false }, "", "https://meet.google.com/abc-defg-hij");
+        assert!(missed.contains("couldn't press Join now"), "{missed}");
+        let failed = meet_speech(
+            Some("I couldn't send that WhatsApp."),
+            MeetView { opened: true, joined: true },
+            "Siya",
+            "https://meet.google.com/abc-defg-hij",
+        );
+        assert!(failed.contains("couldn't send"), "{failed}");
+        assert!(!failed.contains("Sent the Meet"));
     }
 }

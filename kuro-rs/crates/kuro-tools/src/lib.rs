@@ -13,6 +13,7 @@ pub mod meet;
 mod meet_busy;
 pub mod meet_followup;
 mod meet_http;
+mod meet_join;
 mod meet_last;
 mod meet_match;
 pub mod music;
@@ -23,6 +24,7 @@ pub mod screen;
 pub mod tuya;
 mod wa_ffi;
 pub mod wa_neonize;
+mod wa_proto;
 pub mod whatsapp;
 
 type ToolHook = Box<dyn Fn(&str, &Value) -> String>;

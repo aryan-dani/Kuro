@@ -30,6 +30,7 @@ pub(crate) type IsConnectedFn = unsafe extern "C" fn(*const c_char) -> bool;
 pub(crate) type IsLoggedInFn = unsafe extern "C" fn(*const c_char) -> bool;
 pub(crate) type StopFn = unsafe extern "C" fn(*const c_char);
 pub(crate) type FreeBytesFn = unsafe extern "C" fn(*mut GoBytes);
+pub(crate) type GetLidFn = unsafe extern "C" fn(*const c_char, *const u8, c_int) -> *mut GoBytes;
 
 #[repr(C)]
 pub(crate) struct GoBytes {
@@ -45,6 +46,7 @@ pub(crate) struct Api {
     pub is_logged_in: IsLoggedInFn,
     pub stop: StopFn,
     pub free_bytes: FreeBytesFn,
+    pub get_lid: Option<GetLidFn>,
 }
 
 pub(crate) fn dll_candidates() -> Vec<PathBuf> {
@@ -109,6 +111,7 @@ pub(crate) fn load_api(path: &Path) -> Result<Api, String> {
         let stop = *lib.get::<StopFn>(b"Stop\0").map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
         let free_bytes =
             *lib.get::<FreeBytesFn>(b"FreeBytesStruct\0").map_err(|_| "I couldn't send that WhatsApp.".to_string())?;
-        Ok(Api { _lib: lib, neonize, send_message, is_connected, is_logged_in, stop, free_bytes })
+        let get_lid = lib.get::<GetLidFn>(b"GetLIDFromPN\0").ok().map(|sym| *sym);
+        Ok(Api { _lib: lib, neonize, send_message, is_connected, is_logged_in, stop, free_bytes, get_lid })
     }
 }

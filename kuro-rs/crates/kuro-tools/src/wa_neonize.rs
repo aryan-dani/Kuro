@@ -56,44 +56,8 @@ fn session_likely() -> bool {
     std::fs::metadata(session_path()).map(|m| m.len() > 4096).unwrap_or(false)
 }
 
-fn pb_varint(mut v: u64, out: &mut Vec<u8>) {
-    while v >= 0x80 {
-        out.push((v as u8) | 0x80);
-        v >>= 7;
-    }
-    out.push(v as u8);
-}
-
-fn pb_bytes(field: u32, data: &[u8], out: &mut Vec<u8>) {
-    pb_varint(u64::from((field << 3) | 2), out);
-    pb_varint(data.len() as u64, out);
-    out.extend_from_slice(data);
-}
-
-fn pb_string(field: u32, s: &str, out: &mut Vec<u8>) {
-    pb_bytes(field, s.as_bytes(), out);
-}
-
-fn pb_varint_field(field: u32, v: u64, out: &mut Vec<u8>) {
-    pb_varint(u64::from(field << 3), out);
-    pb_varint(v, out);
-}
-
-fn encode_jid(digits: &str) -> Vec<u8> {
-    let mut out = Vec::new();
-    pb_string(1, digits, &mut out);
-    pb_varint_field(2, 0, &mut out);
-    pb_varint_field(3, 0, &mut out);
-    pb_varint_field(4, 0, &mut out);
-    pb_string(5, "s.whatsapp.net", &mut out);
-    pb_varint_field(6, 0, &mut out);
-    out
-}
-
-fn encode_text_message(text: &str) -> Vec<u8> {
-    let mut out = Vec::new();
-    pb_string(1, text, &mut out);
-    out
+fn log_wa(line: &str) {
+    kuro_core::append_rotating_log(&kuro_core::KuroPaths::from_env().log(), line, 1_000_000);
 }
 
 fn show_qr(code: &str) {
@@ -228,26 +192,7 @@ fn worker_main(st: Arc<State>, rx: Receiver<Cmd>) {
                     });
                     continue;
                 }
-                let jid = encode_jid(&digits);
-                let msg = encode_text_message(&text);
-                let result = unsafe {
-                    let ptr = (api.send_message)(
-                        uuid.as_ptr(),
-                        jid.as_ptr(),
-                        jid.len() as c_int,
-                        msg.as_ptr(),
-                        msg.len() as c_int,
-                    );
-                    if ptr.is_null() {
-                        Err("I couldn't send that WhatsApp.".into())
-                    } else {
-                        let slice = std::slice::from_raw_parts((*ptr).ptr, (*ptr).size);
-                        // SendMessageReturnFunction: Error is a string field; empty bytes => ok.
-                        let err = parse_send_error(slice);
-                        (api.free_bytes)(ptr);
-                        if err.is_empty() { Ok(()) } else { Err("I couldn't send that WhatsApp.".into()) }
-                    }
-                };
+                let result = send_one(&api, uuid, &digits, &text);
                 let _ = reply.send(result);
             }
         }
@@ -257,18 +202,56 @@ fn worker_main(st: Arc<State>, rx: Receiver<Cmd>) {
     }
 }
 
-fn parse_send_error(bytes: &[u8]) -> String {
-    // Best-effort: if protobuf contains a long ascii error string, surface failure.
-    if bytes.is_empty() {
-        return String::new();
+fn send_one(api: &Api, uuid: &CString, digits: &str, text: &str) -> Result<(), String> {
+    let msg = crate::wa_proto::encode_text_message(text);
+    let phone = crate::wa_proto::encode_jid(digits, "s.whatsapp.net");
+    let lid = lookup_lid(api, uuid, &phone);
+    let used_lid = lid.is_some();
+    let target = lid.unwrap_or_else(|| phone.clone());
+    if call_send(api, uuid, &target, &msg) {
+        log_wa(if used_lid { "whatsapp send ok via=lid" } else { "whatsapp send ok via=phone" });
+        return Ok(());
     }
-    // Field Error on return protos is typically a string; look for printable runs.
-    let ascii: String = bytes.iter().map(|&b| if (32..127).contains(&b) { b as char } else { ' ' }).collect();
-    let trimmed = ascii.split_whitespace().collect::<Vec<_>>().join(" ");
-    if trimmed.len() > 8 && (trimmed.contains("error") || trimmed.contains("Error") || trimmed.contains("fail")) {
-        return trimmed;
+    if used_lid && call_send(api, uuid, &phone, &msg) {
+        log_wa("whatsapp send ok via=phone");
+        return Ok(());
     }
-    String::new()
+    log_wa("whatsapp send fail");
+    Err("I couldn't send that WhatsApp.".into())
+}
+
+fn lookup_lid(api: &Api, uuid: &CString, phone: &[u8]) -> Option<Vec<u8>> {
+    let get_lid = api.get_lid?;
+    let bytes = unsafe {
+        let ptr = get_lid(uuid.as_ptr(), phone.as_ptr(), phone.len() as c_int);
+        if ptr.is_null() {
+            return None;
+        }
+        let owned = if (*ptr).ptr.is_null() || (*ptr).size == 0 {
+            Vec::new()
+        } else {
+            std::slice::from_raw_parts((*ptr).ptr, (*ptr).size).to_vec()
+        };
+        (api.free_bytes)(ptr);
+        owned
+    };
+    let user = crate::wa_proto::lid_user(&bytes)?;
+    Some(crate::wa_proto::encode_jid(&user, "lid"))
+}
+
+fn call_send(api: &Api, uuid: &CString, jid: &[u8], msg: &[u8]) -> bool {
+    unsafe {
+        let ptr = (api.send_message)(uuid.as_ptr(), jid.as_ptr(), jid.len() as c_int, msg.as_ptr(), msg.len() as c_int);
+        if ptr.is_null() {
+            return false;
+        }
+        let ok = !(*ptr).ptr.is_null() && (*ptr).size > 0 && {
+            let slice = std::slice::from_raw_parts((*ptr).ptr, (*ptr).size);
+            crate::wa_proto::proto_error(slice).is_none()
+        };
+        (api.free_bytes)(ptr);
+        ok
+    }
 }
 
 /// Send plain text to a phone number (digits only). Speaks the same lines as tools/wa_link.py.
@@ -293,11 +276,10 @@ pub fn deliver_text(digits: &str, text: &str) -> Result<(), String> {
         }
         thread::sleep(Duration::from_millis(50));
     }
-    if !(st.ready.load(Ordering::SeqCst) || READY_FLAG.load(Ordering::SeqCst)) {
-        if st.qr_open.load(Ordering::SeqCst) || QR_FLAG.load(Ordering::SeqCst) {
-            return Err(LINK_SPOKEN.into());
-        }
-        return Err("WhatsApp is still linking. Try again in a moment.".into());
+    if (st.qr_open.load(Ordering::SeqCst) || QR_FLAG.load(Ordering::SeqCst))
+        && !(st.ready.load(Ordering::SeqCst) || READY_FLAG.load(Ordering::SeqCst))
+    {
+        return Err(LINK_SPOKEN.into());
     }
     let (reply_tx, reply_rx) = mpsc::channel();
     let tx = st.tx.lock().unwrap_or_else(|e| e.into_inner());

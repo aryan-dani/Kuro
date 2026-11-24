@@ -3,7 +3,6 @@
 use kuro_features::{FeatureContext, FeatureRegistry, SystemClock};
 use kuro_llm::{AgentConfig, AgentLlm, FakeLlm, NullLlm, run_agent_turn};
 use kuro_router::RouteResult;
-use kuro_router::try_handle;
 use kuro_turn::RouteOutcome;
 
 pub struct AgentHook {
@@ -61,7 +60,8 @@ pub(crate) fn try_agent_route(
     turn_id: u64,
     plan_id: u64,
 ) -> Option<AgentRoute> {
-    if try_handle(text).is_some() {
+    // route_command already ran the phrase. Calling try_handle again created a second Meet.
+    if !routed.reply.is_empty() {
         return None;
     }
     // Hybrid: soft Meet follow-ups work even when the full agent loop is off.
@@ -81,4 +81,29 @@ pub(crate) fn try_agent_route(
         return Some(AgentRoute::Reply(reply, routed.skip_tts));
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static MEET_HITS: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn agent_check_does_not_create_a_second_meet() {
+        MEET_HITS.store(0, Ordering::SeqCst);
+        kuro_tools::set_executor(Some(Box::new(|name, _| {
+            if name == "make_meet" {
+                MEET_HITS.fetch_add(1, Ordering::SeqCst);
+            }
+            "Success: The Meet is open.".into()
+        })));
+        let text = "make a google meet";
+        let routed = kuro_router::route_command(text, true, None, "fallback", false);
+        assert_eq!(MEET_HITS.load(Ordering::SeqCst), 1, "phrase route should create one meet");
+        assert!(try_agent_route(&AgentHook::default(), text, &routed, "fallback", 1, 1).is_none());
+        assert_eq!(MEET_HITS.load(Ordering::SeqCst), 1, "agent check must not create another meet");
+        kuro_tools::set_executor(None);
+    }
 }
