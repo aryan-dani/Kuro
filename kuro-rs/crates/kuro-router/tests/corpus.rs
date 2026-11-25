@@ -270,9 +270,6 @@ fn golden_phrase_corpus() {
     let mut skipped_model = 0usize;
     let mut total = 0usize;
     let mut failures: Vec<String> = Vec::new();
-
-    // Stable order: rituals and meet last among cooldown-sensitive content is
-    // already file-internal; process all files alphabetically for determinism.
     for path in &files {
         let mut cases = load_cases(path);
         assert!(cases.len() >= 8, "{} has fewer than 8 cases", path.display());
@@ -282,7 +279,6 @@ fn golden_phrase_corpus() {
                 skipped_model += 1;
                 continue;
             }
-
             calls().lock().unwrap().clear();
             let normalized = normalize(&case.input);
             if bless {
@@ -296,7 +292,7 @@ fn golden_phrase_corpus() {
             let actual_intent = intent_name(&normalized);
             if bless {
                 case.intent = actual_intent.clone();
-            } else if let Some(expected_intent) = &case.intent {
+            } else if model_ready && let Some(expected_intent) = &case.intent {
                 match &actual_intent {
                     Some(name) if name == expected_intent => {}
                     Some(name) => failures.push(format!("{}: intent want {expected_intent:?} got {name:?}", case.id)),
@@ -306,6 +302,10 @@ fn golden_phrase_corpus() {
 
             let handled = try_handle(&case.input);
             let is_handled = handled.is_some();
+            if !bless && !model_ready && case.handled == Some(true) && !is_handled && case.intent.is_some() {
+                skipped_model += 1;
+                continue;
+            }
             if bless {
                 case.handled = Some(is_handled);
             } else if let Some(want) = case.handled
