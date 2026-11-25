@@ -123,7 +123,7 @@ fn assert_fixture(name: &str, actual: &Value) {
         std::fs::write(&path, &rendered).unwrap();
         return;
     }
-    let expected = std::fs::read_to_string(&path).unwrap();
+    let expected = std::fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
     assert_eq!(expected, rendered, "fixture drift in {}", path.display());
 }
 
