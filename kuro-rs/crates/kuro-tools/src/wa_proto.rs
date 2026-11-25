@@ -108,6 +108,21 @@ fn pb_varint_field(field: u32, v: u64, out: &mut Vec<u8>) {
     pb_varint(v, out);
 }
 
+/// Build candidate international digit strings for WhatsApp JIDs.
+/// When `digits` is a 10-digit local number and `country_code` is known, try `{cc}{digits}` first.
+pub fn candidate_digits(digits: &str, country_code: Option<&str>) -> Vec<String> {
+    let mut out = Vec::with_capacity(2);
+    if digits.len() == 10
+        && let Some(cc) = country_code
+        && !cc.is_empty()
+        && cc.bytes().all(|b| b.is_ascii_digit())
+    {
+        out.push(format!("{cc}{digits}"));
+    }
+    out.push(digits.to_string());
+    out
+}
+
 /// Hide phone-number-like digit runs (5 or more) before a reason goes into the log.
 pub fn redact_digits(text: &str) -> String {
     fn flush(out: &mut String, run: &mut String) {
@@ -140,6 +155,13 @@ mod tests {
     fn redact_hides_numbers_but_keeps_short_codes() {
         assert_eq!(redact_digits("jid 15551234567 rejected"), "jid # rejected");
         assert_eq!(redact_digits("status 401"), "status 401");
+    }
+
+    #[test]
+    fn ten_digit_number_tries_country_code_first() {
+        assert_eq!(candidate_digits("5551234567", Some("91")), vec!["915551234567", "5551234567"]);
+        assert_eq!(candidate_digits("915551234567", Some("91")), vec!["915551234567"]);
+        assert_eq!(candidate_digits("5551234567", None), vec!["5551234567"]);
     }
 
     #[test]

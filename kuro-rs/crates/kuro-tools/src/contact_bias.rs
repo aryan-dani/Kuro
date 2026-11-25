@@ -132,7 +132,15 @@ pub fn resolve_contact(query: &str, book: &HashMap<String, String>) -> Option<(S
     None
 }
 
-/// Rewrite heard tokens to book display names before routing (Sia → Siya).
+/// Common English words that must never be rewritten into contact names.
+const STOPWORDS: &[&str] = &[
+    "the", "and", "for", "are", "but", "not", "you", "all", "can", "her", "was", "one", "our", "out", "has", "his",
+    "how", "its", "let", "may", "new", "now", "old", "see", "two", "way", "who", "did", "get", "had", "say", "she",
+    "too", "use", "send", "make", "link", "meet", "call", "open", "join", "with", "this", "that", "from", "have",
+    "just", "like", "what", "when", "will", "your", "google", "whatsapp", "kuro",
+];
+
+/// Rewrite heard tokens to book display names before routing (Sia -> Siya).
 pub fn rewrite_transcript(text: &str, book: &HashMap<String, String>) -> String {
     if text.trim().is_empty() || book.is_empty() {
         return text.to_string();
@@ -140,7 +148,11 @@ pub fn rewrite_transcript(text: &str, book: &HashMap<String, String>) -> String 
     text.split_whitespace()
         .map(|tok| {
             let clean = tok.trim_matches(|c: char| !c.is_alphanumeric());
-            if clean.len() < 2 {
+            if clean.len() < 3 {
+                return tok.to_string();
+            }
+            let lower = clean.to_ascii_lowercase();
+            if STOPWORDS.contains(&lower.as_str()) {
                 return tok.to_string();
             }
             match resolve_contact(clean, book) {
@@ -187,5 +199,15 @@ mod tests {
     fn stt_names_include_siya() {
         let names = stt_contact_names(&book());
         assert!(names.iter().any(|n| n == "Siya"));
+    }
+
+    #[test]
+    fn rewrite_does_not_corrupt_common_english_words() {
+        let mut b = book();
+        b.insert("TD".into(), "910000000003".into());
+        b.insert("the_dk".into(), "910000000004".into());
+        b.insert("~CANDE".into(), "910000000005".into());
+        let out = rewrite_transcript("Make a Google Meet link and send the link to Sia.", &b);
+        assert_eq!(out, "Make a Google Meet link and send the link to Siya.");
     }
 }

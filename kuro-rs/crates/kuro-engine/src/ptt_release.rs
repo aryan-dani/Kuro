@@ -28,7 +28,7 @@ pub(crate) fn spawn_ptt_release_worker(job: PttReleaseJob) {
 fn run_ptt_release(job: PttReleaseJob) {
     let PttReleaseJob { gate_ci, pcm, clip, epoch, voice, state, clock, worker_gate } = job;
     let _guard = worker_gate.worker_guard(epoch);
-    let book = kuro_tools::whatsapp::address_book();
+    let book = kuro_tools::whatsapp::load_contacts();
     let contacts = kuro_tools::contact_bias::stt_contact_names(&book);
     let prompt = kuro_stt::initial_prompt(&[], &contacts);
     let transcript = if pcm.len() < 1600 {
@@ -159,7 +159,7 @@ fn run_follow_ups(
         set_hud(&app.hud, "thinking", "thinking", Some(vec![0.0; 11]), "", "", Some(&app.hud_wake));
         let mut pcm = follow_buffer.pcm;
         kuro_audio::normalize_gain(&mut pcm, 0.15);
-        let book = kuro_tools::whatsapp::address_book();
+        let book = kuro_tools::whatsapp::load_contacts();
         let contacts = kuro_tools::contact_bias::stt_contact_names(&book);
         let prompt = kuro_stt::initial_prompt(&[], &contacts);
         let next_transcript = match kuro_stt::transcribe_pcm(&pcm, 16_000, false, &prompt) {

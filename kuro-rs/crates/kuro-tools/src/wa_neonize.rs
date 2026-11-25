@@ -204,22 +204,44 @@ fn worker_main(st: Arc<State>, rx: Receiver<Cmd>) {
     }
 }
 
+fn default_country_code() -> Option<String> {
+    if let Ok(raw) = std::env::var("KURO_COUNTRY_CODE") {
+        let cc: String = raw.chars().filter(char::is_ascii_digit).collect();
+        if !cc.is_empty() && cc.len() <= 3 {
+            return Some(cc);
+        }
+    }
+    let book = crate::whatsapp::load_contacts();
+    let me = book.iter().find(|(k, _)| crate::whatsapp::normalize(k) == "me")?.1;
+    if me.len() > 10 && me.len() <= 13 { Some(me[..me.len() - 10].to_string()) } else { None }
+}
+
 fn send_one(api: &Api, uuid: &CString, digits: &str, text: &str) -> Result<(), String> {
     let msg = crate::wa_proto::encode_text_message(text);
-    let phone = crate::wa_proto::encode_jid(digits, "s.whatsapp.net");
-    let lid = lookup_lid(api, uuid, &phone);
-    let used_lid = lid.is_some();
-    let target = lid.unwrap_or_else(|| phone.clone());
-    let Err(first) = call_send(api, uuid, &target, &msg) else {
-        log_wa(if used_lid { "whatsapp send ok via=lid" } else { "whatsapp send ok via=phone" });
-        return Ok(());
-    };
-    if used_lid && call_send(api, uuid, &phone, &msg).is_ok() {
-        log_wa("whatsapp send ok via=phone");
-        return Ok(());
+    let cc = default_country_code();
+    let mut last_err = String::from("no candidate digits");
+    let mut last_via = "phone";
+    for cand in crate::wa_proto::candidate_digits(digits, cc.as_deref()) {
+        let phone = crate::wa_proto::encode_jid(&cand, "s.whatsapp.net");
+        let lid = lookup_lid(api, uuid, &phone);
+        let used_lid = lid.is_some();
+        let target = lid.unwrap_or_else(|| phone.clone());
+        match call_send(api, uuid, &target, &msg) {
+            Ok(()) => {
+                log_wa(if used_lid { "whatsapp send ok via=lid" } else { "whatsapp send ok via=phone" });
+                return Ok(());
+            }
+            Err(err) => {
+                last_err = err;
+                last_via = if used_lid { "lid" } else { "phone" };
+            }
+        }
+        if used_lid && call_send(api, uuid, &phone, &msg).is_ok() {
+            log_wa("whatsapp send ok via=phone");
+            return Ok(());
+        }
     }
-    let via = if used_lid { "lid" } else { "phone" };
-    log_wa(&format!("whatsapp send fail via={via} reason={}", crate::wa_proto::redact_digits(&first)));
+    log_wa(&format!("whatsapp send fail via={last_via} reason={}", crate::wa_proto::redact_digits(&last_err)));
     Err("I couldn't send that WhatsApp.".into())
 }
 
