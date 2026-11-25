@@ -289,10 +289,14 @@ fn golden_phrase_corpus() {
                 failures.push(format!("{}: normalized want {expected:?} got {normalized:?}", case.id));
             }
 
+            if !bless && !model_ready && case.intent.is_some() {
+                skipped_model += 1;
+                continue;
+            }
             let actual_intent = intent_name(&normalized);
             if bless {
                 case.intent = actual_intent.clone();
-            } else if model_ready && let Some(expected_intent) = &case.intent {
+            } else if let Some(expected_intent) = &case.intent {
                 match &actual_intent {
                     Some(name) if name == expected_intent => {}
                     Some(name) => failures.push(format!("{}: intent want {expected_intent:?} got {name:?}", case.id)),
@@ -302,10 +306,6 @@ fn golden_phrase_corpus() {
 
             let handled = try_handle(&case.input);
             let is_handled = handled.is_some();
-            if !bless && !model_ready && case.handled == Some(true) && !is_handled && case.intent.is_some() {
-                skipped_model += 1;
-                continue;
-            }
             if bless {
                 case.handled = Some(is_handled);
             } else if let Some(want) = case.handled

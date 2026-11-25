@@ -33,6 +33,12 @@ fn bgra_to_rgba(bgra: &[u8]) -> Vec<u8> {
     rgba
 }
 
+#[cfg(not(windows))]
+fn capture_bgra() -> Option<(u32, u32, Vec<u8>)> {
+    None
+}
+
+#[cfg(windows)]
 fn capture_bgra() -> Option<(u32, u32, Vec<u8>)> {
     unsafe {
         use windows_sys::Win32::Graphics::Gdi::{
