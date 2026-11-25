@@ -5,9 +5,9 @@
     "ok": true,
     "paused": false,
     "protocol": 1,
-    "router_mode": "semantic_onnx",
+    "router_mode": "<volatile>",
     "state": "hidden",
-    "tts_active": "kokoro"
+    "tts_active": "<volatile>"
   },
   "status": 200
 }

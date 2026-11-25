@@ -74,7 +74,7 @@ fn scrub(mut value: Value) -> Value {
         match v {
             Value::Object(map) => {
                 for (k, child) in map.iter_mut() {
-                    if matches!(k.as_str(), "logs" | "pid" | "uptime" | "started_at") {
+                    if matches!(k.as_str(), "logs" | "pid" | "uptime" | "started_at" | "router_mode" | "tts_active") {
                         *child = json!("<volatile>");
                     } else {
                         walk(child);

@@ -4,9 +4,9 @@
     "llm_mode": "fallback",
     "paused": false,
     "plug_id_masked": "",
-    "router_mode": "semantic_onnx",
+    "router_mode": "<volatile>",
     "stt_backend": "auto",
-    "tts_active": "kokoro",
+    "tts_active": "<volatile>",
     "tts_engine": "auto",
     "xtts_language": "en"
   },
