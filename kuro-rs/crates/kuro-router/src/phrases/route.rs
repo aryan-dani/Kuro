@@ -81,16 +81,15 @@ pub fn route_command(
             start_ollama: false,
         };
     }
-    // Actuation requests that missed the tool phrase: honest miss, never chat waffle.
-    if kuro_tools::honesty::wants_tool_actuation(text) {
-        return RouteResult {
-            reply: kuro_tools::honesty::honest_tool_miss(text),
-            skip_tts: false,
-            force_fast: true,
-            start_ollama: false,
-        };
-    }
     if llm_mode == "off" {
+        if kuro_tools::honesty::wants_tool_actuation(text) {
+            return RouteResult {
+                reply: kuro_tools::honesty::honest_tool_miss(text),
+                skip_tts: false,
+                force_fast: true,
+                start_ollama: false,
+            };
+        }
         return RouteResult {
             reply: "I don't have a phrase for that yet. Desk, news, music, meet, WhatsApp, and workflows work offline."
                 .into(),
@@ -100,6 +99,14 @@ pub fn route_command(
         };
     }
     if !ollama_up {
+        if kuro_tools::honesty::wants_tool_actuation(text) {
+            return RouteResult {
+                reply: kuro_tools::honesty::honest_tool_miss(text),
+                skip_tts: false,
+                force_fast: true,
+                start_ollama: true,
+            };
+        }
         return RouteResult {
             reply: "Neural engine is off. Please wait while I start it.".into(),
             skip_tts: false,

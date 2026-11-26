@@ -2,6 +2,7 @@ mod api;
 mod boot;
 mod config_log;
 mod hud;
+mod live_controls;
 mod meet_followup_route;
 mod panic_hook;
 mod ptt_loop;

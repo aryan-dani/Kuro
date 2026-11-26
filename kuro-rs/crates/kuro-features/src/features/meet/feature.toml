@@ -4,6 +4,7 @@ title = "Google Meet"
 tier = "reversible"
 default_enabled = true
 priority = 25
+llm_description = "Create or join a Google Meet. Slots: action (\"create\" or \"join\"), contact (optional contact name to send the link to on WhatsApp)."
 
 [[intents]]
 id = "meet.create"

@@ -4,6 +4,7 @@ title = "WhatsApp"
 tier = "external_send"
 default_enabled = true
 priority = 26
+llm_description = "Send a WhatsApp message. Slots: contact (contact name), source (\"text\", \"clipboard\", or \"browser_url\"), text (message body when source is \"text\")."
 
 [[intents]]
 id = "whatsapp.send"

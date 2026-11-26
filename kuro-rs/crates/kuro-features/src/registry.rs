@@ -37,6 +37,30 @@ impl FeatureRegistry {
         self.entries.push(feature);
     }
 
+    /// Replace an existing feature with the same id, or append if absent.
+    pub fn register_or_replace(&mut self, feature: Box<dyn Feature>) {
+        let id = feature.id().to_string();
+        if let Some(slot) = self.entries.iter_mut().find(|f| f.id() == id) {
+            *slot = feature;
+        } else {
+            self.entries.push(feature);
+        }
+    }
+
+    /// Render a compact catalog of registered features for the LLM tool planner.
+    pub fn catalog_prompt(&self) -> String {
+        self.entries
+            .iter()
+            .filter(|f| f.manifest().default_enabled)
+            .map(|f| {
+                let m = f.manifest();
+                let desc = if m.llm_description.is_empty() { &m.title } else { &m.llm_description };
+                format!("- {} (tier: {}): {}", m.id, m.tier, desc)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     pub fn ids(&self) -> Vec<&str> {
         self.entries.iter().map(|f| f.id()).collect()
     }

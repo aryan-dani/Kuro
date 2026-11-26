@@ -14,6 +14,8 @@ pub struct FeatureManifest {
     #[serde(default)]
     pub priority: u32,
     #[serde(default)]
+    pub llm_description: String,
+    #[serde(default)]
     pub replies: BTreeMap<String, String>,
 }
 
