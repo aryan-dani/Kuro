@@ -207,6 +207,9 @@ fn source_for(kind: &str) -> &'static str {
 
 pub fn match_phrase(text: &str) -> Option<HashMap<String, String>> {
     let body = strip_fillers(text);
+    if let Some(free) = match_free_text(&body) {
+        return Some(free);
+    }
     let re = Regex::new(
         r"^(?:send\s+(?:me\s+)?(?:(?:my|the|this)\s+)?(?P<kind>meeting link|link|clipboard|message)\s+to\s+(?P<name>.+?)\s+(?:on|in|via)\s+whatsapp|send\s+(?:me\s+)?(?:(?:my|the|this)\s+)?(?P<kind_me>meeting link|link|clipboard|message)(?:\s+(?!to\b)\w+){0,4}\s+(?:on|in|via)\s+whatsapp|whatsapp\s+(?P<name2>.+?)\s+(?:this|the)\s+link)$",
     )
@@ -229,6 +232,49 @@ pub fn match_phrase(text: &str) -> Option<HashMap<String, String>> {
     out.insert("contact".into(), name);
     out.insert("source".into(), source.into());
     Some(out)
+}
+
+fn match_free_text(body: &str) -> Option<HashMap<String, String>> {
+    let re = Regex::new(
+        r"^(?P<verb>ask|tell|message|text|whatsapp)\s+(?P<name>[a-z0-9]+(?:\s+[a-z0-9]+)?)\s+(?:on|in|via)\s+whatsapp\s+(?P<msg>.+)$",
+    )
+    .ok()?;
+    let caps = re.captures(body).ok().flatten()?;
+    let verb = caps.name("verb")?.as_str();
+    let name = caps.name("name")?.as_str().trim().to_string();
+    let raw_msg = caps.name("msg")?.as_str().trim();
+    if name.is_empty() || raw_msg.is_empty() {
+        return None;
+    }
+    let text = format_free_text(verb, raw_msg);
+    if text.is_empty() {
+        return None;
+    }
+    let mut out = HashMap::new();
+    out.insert("contact".into(), name);
+    out.insert("source".into(), "text".into());
+    out.insert("text".into(), text);
+    Some(out)
+}
+
+fn format_free_text(verb: &str, raw: &str) -> String {
+    let stripped = raw.strip_prefix("saying ").or_else(|| raw.strip_prefix("that ")).unwrap_or(raw).trim();
+    if verb == "ask" {
+        if let Some(rest) = stripped.strip_prefix("if ") {
+            for prefix in ["shes ", "she s ", "she is ", "hes ", "he s ", "he is ", "theyre ", "they re ", "they are "]
+            {
+                if let Some(adj) = rest.strip_prefix(prefix) {
+                    let adj = adj.trim();
+                    if !adj.is_empty() {
+                        return format!("Are you {adj}?");
+                    }
+                }
+            }
+            return format!("{rest}?");
+        }
+        return format!("{stripped}?");
+    }
+    stripped.to_string()
 }
 
 /// Resolve body text for a send. Clipboard / browser URL stay local Win32 reads.
@@ -313,5 +359,23 @@ pub fn run(arguments: &Value) -> String {
     match deliver_text(&digits, &body) {
         Ok(()) => format!("Success: Sent that to {}.", spoken_recipient(&name)),
         Err(err) => err,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn free_text_ask_and_tell_on_whatsapp_match() {
+        let ask = match_phrase("Kuro. Can you please ask Siya on WhatsApp if she's okay?").expect("ask match");
+        assert_eq!(ask.get("contact").map(String::as_str), Some("siya"));
+        assert_eq!(ask.get("source").map(String::as_str), Some("text"));
+        assert_eq!(ask.get("text").map(String::as_str), Some("Are you okay?"));
+
+        let tell = match_phrase("tell Siya on WhatsApp that I am on my way").expect("tell match");
+        assert_eq!(tell.get("contact").map(String::as_str), Some("siya"));
+        assert_eq!(tell.get("source").map(String::as_str), Some("text"));
+        assert_eq!(tell.get("text").map(String::as_str), Some("i am on my way"));
     }
 }
