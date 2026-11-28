@@ -85,7 +85,7 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 rodio = "0.19"
 rusqlite = { version = "0.32", features = ["bundled"] }
-cpal = "0.15"
+cpal = "0.17"
 png = "0.17"
 aes-gcm = "0.10"
 libloading = "0.8"
