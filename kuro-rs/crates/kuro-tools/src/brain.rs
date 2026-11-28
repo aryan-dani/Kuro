@@ -121,7 +121,7 @@ pub fn chat(model: &str, messages: &[Value]) -> Result<String, String> {
         "messages": messages,
         "stream": false,
         "think": false,
-        "keep_alive": "30m",
+        "keep_alive": "120m",
         "options": { "num_ctx": num_ctx }
     })
     .to_string();
@@ -146,7 +146,7 @@ pub fn prewarm_model(model: &str) {
     let url = format!("{}/api/generate", base.trim_end_matches('/'));
     let body = json!({
         "model": model,
-        "keep_alive": "60m"
+        "keep_alive": "120m"
     })
     .to_string();
     let _ = ureq::post(&url)

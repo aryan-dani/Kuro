@@ -5,7 +5,7 @@ use crate::agent::AgentConfig;
 use crate::agent_llm::AgentLlm;
 use crate::fake::FakeLlm;
 use crate::tool_plan::ToolPlan;
-use crate::turn::run_agent_turn;
+use crate::turn::{TurnRequest, run_agent_request, run_agent_turn};
 
 fn with_ctx(run: impl FnOnce(&FeatureContext<'_>)) {
     let clock = FakeClock::at(chrono::Utc::now());
@@ -114,5 +114,63 @@ fn executes_reversible_without_confirm() {
         let out = run_agent_turn(&config, &llm, &registry, ctx, "desk off", 4, 7).expect("enabled");
         assert_eq!(out.speeches, vec!["Desk off."]);
         assert!(out.pending_confirm.is_none());
+    });
+}
+
+fn whatsapp_plan(source: &str, text: &str) -> ToolPlan {
+    ToolPlan {
+        feature_id: "whatsapp".into(),
+        slots: json!({"contact": "Siya", "source": source, "text": text}),
+        summary: "Message Siya on WhatsApp.".into(),
+    }
+}
+
+#[test]
+fn saved_contact_named_in_request_sends_without_confirm() {
+    let config = AgentConfig { enabled: true, max_steps: 1 };
+    let llm = llm_with_plan_batches(vec![vec![whatsapp_plan("text", "How are you?")]]);
+    let registry = FeatureRegistry::with_features();
+    let direct = vec!["Siya".to_string()];
+    let req =
+        TurnRequest { user_text: "Hey Kuro. Ask Siya how she is.", turn_id: 5, plan_id: 11, direct_contacts: &direct };
+    with_ctx(|ctx| {
+        let out = run_agent_request(&config, &llm, &registry, ctx, &req).expect("enabled");
+        assert!(out.pending_confirm.is_none(), "saved contact named by the user should not need confirm");
+        assert_eq!(out.audit.entries().len(), 1);
+        assert_ne!(out.audit.entries()[0].result, "confirm_pending");
+    });
+}
+
+#[test]
+fn saved_contact_not_named_in_request_still_confirms() {
+    let config = AgentConfig { enabled: true, max_steps: 1 };
+    let llm = llm_with_plan_batches(vec![vec![whatsapp_plan("text", "How are you?")]]);
+    let registry = FeatureRegistry::with_features();
+    let direct = vec!["Siya".to_string()];
+    let req = TurnRequest {
+        user_text: "Hey Kuro. Ask my sister how she is.",
+        turn_id: 5,
+        plan_id: 11,
+        direct_contacts: &direct,
+    };
+    with_ctx(|ctx| {
+        let out = run_agent_request(&config, &llm, &registry, ctx, &req).expect("enabled");
+        assert!(out.pending_confirm.is_some(), "model guessed a contact the user did not say");
+    });
+}
+
+#[test]
+fn unknown_contact_confirms_and_reads_exact_message() {
+    let config = AgentConfig { enabled: true, max_steps: 1 };
+    let llm = llm_with_plan_batches(vec![vec![whatsapp_plan("Kuro", "How are you?")]]);
+    let registry = FeatureRegistry::with_features();
+    let req = TurnRequest { user_text: "Ask Siya how she is.", turn_id: 5, plan_id: 11, direct_contacts: &[] };
+    with_ctx(|ctx| {
+        let out = run_agent_request(&config, &llm, &registry, ctx, &req).expect("enabled");
+        let pending = out.pending_confirm.expect("confirm");
+        assert!(pending.confirm_summary.contains("\"How are you?\""), "got {}", pending.confirm_summary);
+        assert!(pending.reply.contains("Say yes"), "got {}", pending.reply);
+        let plan = out.pending_plan.expect("plan");
+        assert_eq!(plan.slots["source"], "text", "invalid source should fall back to text");
     });
 }

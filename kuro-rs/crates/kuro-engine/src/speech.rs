@@ -16,6 +16,15 @@ pub fn warm_speech() {
     }
 }
 
+/// Load the chat model without touching speech workers. Runs at boot even away from home,
+/// so the first planned request does not wait for a cold model load.
+pub fn warm_ollama() {
+    if ollama_up() {
+        let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "gemma4:e4b".into());
+        kuro_tools::brain::prewarm_model(&model);
+    }
+}
+
 pub fn ollama_up() -> bool {
     let Ok(addr) = "127.0.0.1:11434".parse() else {
         return false;

@@ -18,4 +18,4 @@ pub use null::NullLlm;
 pub use planner::{PlannerLlm, extract_json_array, planner_system_prompt};
 pub use provider::LlmProvider;
 pub use tool_plan::{ToolPlan, parse_tool_plans_json};
-pub use turn::{AgentRunResult, execute_confirmed_plan, run_agent_turn};
+pub use turn::{AgentRunResult, TurnRequest, execute_confirmed_plan, run_agent_request, run_agent_turn};

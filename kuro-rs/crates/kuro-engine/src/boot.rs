@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use kuro_ipc::AppState;
 
-use crate::speech::{unload_speech, warm_speech};
+use crate::speech::{unload_speech, warm_ollama, warm_speech};
 use crate::util::log_line;
 
 pub const ENGINE_ENV_KEYS: &[&str] = &[
@@ -36,8 +36,13 @@ pub fn spawn_heartbeat(beat: std::path::PathBuf) {
 }
 
 pub fn spawn_initial_speech_warm(gate_ci: bool, at_home: bool, force_prewarm: bool) {
-    if !gate_ci && (at_home || force_prewarm) {
+    if gate_ci {
+        return;
+    }
+    if at_home || force_prewarm {
         std::thread::spawn(warm_speech);
+    } else {
+        std::thread::spawn(warm_ollama);
     }
 }
 

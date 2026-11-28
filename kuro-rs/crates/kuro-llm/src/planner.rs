@@ -13,7 +13,7 @@ pub fn planner_system_prompt(catalog: &str, contacts: &[String]) -> String {
          Respond with ONLY a JSON array, no prose and no markdown.\n\
          If no tool fits, respond with [].\n\
          Each item must be {{\"feature_id\": \"<id>\", \"slots\": {{...}}, \"summary\": \"<short spoken description>\"}}.\n\
-         For whatsapp text sends, rewrite the message naturally in second person (e.g. \"ask Siya if she's okay\" -> text \"Are you okay?\").\n\
+         For whatsapp messages set source to \"text\" (never a name) and put the message in text, rewritten naturally in second person (e.g. \"ask Siya if she's okay\" -> text \"Are you okay?\").\n\
          {contact_line}\nAvailable tools:\n{catalog}"
     )
 }
