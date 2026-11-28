@@ -57,7 +57,7 @@ regex = "1"
 fancy-regex = "0.14"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 getrandom = "0.2"
-ureq = "2"
+ureq = "3"
 aes = "0.8"
 base64 = "0.22"
 sha2 = "0.10"
