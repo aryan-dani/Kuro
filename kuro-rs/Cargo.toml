@@ -80,7 +80,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Memory",
 ] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
-axum = { version = "0.7", features = ["ws", "json", "tokio"] }
+axum = { version = "0.8", features = ["ws", "json", "tokio"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 rodio = "0.19"
