@@ -12,9 +12,9 @@ fn say_execute_enabled() -> bool {
     std::env::var("KURO_SAY_EXECUTE").ok().as_deref() == Some("1")
 }
 
-/// Semantic ONNX/hash hits only; pattern-only phrases stay unmatched until phase 09.
+/// Semantic ONNX/hash hits or deterministic phrase-router matches; executes nothing.
 pub(crate) fn say_semantic_matched(text: &str) -> bool {
-    kuro_router::route_semantic(&kuro_router::normalize(text)).is_some()
+    kuro_router::route_semantic(&kuro_router::normalize(text)).is_some() || kuro_router::matches(text)
 }
 
 pub(crate) fn say_execute_blocked(text: &str) -> bool {

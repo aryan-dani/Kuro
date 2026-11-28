@@ -32,6 +32,9 @@ fn model_paths() -> Vec<PathBuf> {
 }
 
 pub fn find_onnx() -> Option<PathBuf> {
+    if std::env::var("KURO_NO_MODELS").ok().as_deref() == Some("1") {
+        return None;
+    }
     if let Some(p) = kuro_core::router_embed_onnx() {
         return Some(p);
     }

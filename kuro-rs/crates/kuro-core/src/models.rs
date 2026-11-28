@@ -26,6 +26,9 @@ pub fn repo_root_candidates() -> Vec<PathBuf> {
 
 /// `%LOCALAPPDATA%\Kuro\models\{name}` then `bench/models/{name}` under repo roots.
 pub fn resolve_model_dir(name: &str) -> Option<PathBuf> {
+    if std::env::var("KURO_NO_MODELS").ok().as_deref() == Some("1") {
+        return None;
+    }
     if let Ok(override_dir) = std::env::var(format!("KURO_MODEL_DIR_{}", name.to_ascii_uppercase().replace('-', "_"))) {
         let p = PathBuf::from(override_dir.trim());
         if p.is_dir() {
