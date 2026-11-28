@@ -87,7 +87,7 @@ rodio = "0.19"
 rusqlite = { version = "0.32", features = ["bundled"] }
 cpal = "0.15"
 png = "0.17"
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 libloading = "0.8"
 rtrb = "0.3"
 ort = { version = "2.0.0-rc.15", default-features = true }
